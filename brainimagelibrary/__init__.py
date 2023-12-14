@@ -8,3 +8,4 @@ __credits__ = "HuBMAP IEC Team"
 
 from .retrieve import *
 from .reports import *
+from .inventory import *
