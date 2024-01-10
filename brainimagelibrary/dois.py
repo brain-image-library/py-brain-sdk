@@ -1,17 +1,39 @@
 import requests
+from scholarly import scholarly
 
-def get_number_of_citations(dataset_id='act-bag'):
+
+def get_number_of_citations(dataset_id="act-bag"):
+    data = {}
+    data["datacite"] = __get_number_of_citations_from_datacite(dataset_id=dataset_id)
+    data["gscholar"] = __get_number_of_citations_from_gscholar(dataset_id=dataset_id)
+
+    return data
+
+
+def __get_number_of_citations_from_gscholar(dataset_id="act-bag"):
+    brain = "10.35077"
+    query = f"{brain}/{dataset_id}"
+
+    try:
+        search_query = scholarly.search_pubs(query)
+        metadata = next(search_query)
+        return metadata["num_citations"]
+    except:
+        return None
+
+
+def __get_number_of_citations_from_datacite(dataset_id="act-bag"):
     metadata = __get_datacite_metadata(dataset_id=dataset_id)
 
     try:
-        return metadata['data']['attributes']['citationCount']
+        return metadata["data"]["attributes"]["citationCount"]
     except:
-        #print(f'Unable to retrieve metadata for {dataset_id}')
+        # print(f'Unable to retrieve metadata for {dataset_id}')
         return None
 
-def __get_datacite_metadata(dataset_id='act-bag'):
 
-    brain = '10.35077'
+def __get_datacite_metadata(dataset_id="act-bag"):
+    brain = "10.35077"
     url = f"https://api.datacite.org/dois/{brain}/{dataset_id}"
 
     # Send GET request to the API
