@@ -1,0 +1,6 @@
+pandas
+requests
+tabulate
+python-magic
+humanize
+tqdm

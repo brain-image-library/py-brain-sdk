@@ -12,6 +12,7 @@ setup(
         "requests",
         "tabulate",
         "python-magic",
+	"tqdm", 
         "humanize",
     ],
     packages=["brainimagelibrary"],
