@@ -117,10 +117,4 @@ def __create_daily_report():
         Path(directory).mkdir()
     df.to_csv(output_filename, sep="\t", index=False)
 
-    # save to BRAIN file system
-    directory = "/bil/data/inventory/daily/reports"
-    if Path(directory).exists():
-        output_filename = f"{directory}/{today}.tsv"
-        df.to_csv(output_filename, sep="\t", index=False)
-
     return df
