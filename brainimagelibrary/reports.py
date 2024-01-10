@@ -78,6 +78,10 @@ def __get_did(bildid):
 
 
 def daily():
+    df = pd.DataFrame()
+    return df
+
+def __create_daily_report():
     directory = "reports"
     today = datetime.today().strftime("%Y%m%d")
     output_filename = f"{directory}/{today}.tsv"
@@ -112,4 +116,10 @@ def daily():
         Path(directory).mkdir()
     df.to_csv(output_filename, sep="\t", index=False)
 
+    # save to BRAIN file system
+    directory = '/bil/data/inventory/daily/reports'
+    if Path(directory).exists()
+        output_filename = f"{directory}/{today}.tsv"
+        df.to_csv(output_filename, sep="\t", index=False)
+    
     return df
