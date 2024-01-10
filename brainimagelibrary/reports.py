@@ -83,6 +83,15 @@ def daily():
 
 
 def __create_daily_report():
+    directory = "/bil/data/inventory/daily"
+    today = datetime.today().strftime("%Y%m%d")
+    output_filename = f"{directory}/{today}.tsv"
+
+    if Path(output_filename).exists():
+        print(f"Daily report {output_filename} found on disk.")
+        df = pd.read_csv(output_filename, sep="\t")
+        return df
+
     directory = "reports"
     today = datetime.today().strftime("%Y%m%d")
     output_filename = f"{directory}/{today}.tsv"
@@ -116,5 +125,11 @@ def __create_daily_report():
     if not Path(directory).exists():
         Path(directory).mkdir()
     df.to_csv(output_filename, sep="\t", index=False)
+
+    # save to BRAIN file system
+    directory = "/bil/data/inventory/daily"
+    if Path(directory).exists():
+        output_filename = f"{directory}/{today}.tsv"
+        df.to_csv(output_filename, sep="\t", index=False)
 
     return df
