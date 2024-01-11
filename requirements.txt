@@ -4,3 +4,4 @@ tabulate
 python-magic
 humanize
 tqdm
+scholarly
