@@ -7,6 +7,7 @@ __author__ = "Ivan Cao-Berg"
 __credits__ = "HuBMAP IEC Team"
 
 from .retrieve import *
+from .metadata import *
 from .reports import *
 from .inventory import *
 from .dois import *
