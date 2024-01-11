@@ -77,24 +77,41 @@ def __get_did(bildid):
     return data
 
 
-def daily():
-    base_url = "https://download.brainimagelibrary.org/inventory/daily"
-    today = datetime.today().strftime("%Y%m%d")
-    url = f"{base_url}/{today}.tsv"
+def daily(option="simple"):
+    if option == 'simple':
+        base_url = "https://download.brainimagelibrary.org/inventory/daily"
+        today = datetime.today().strftime("%Y%m%d")
+        url = f"{base_url}/{today}.tsv"
 
-    # Make a request to the URL
-    response = requests.get(url)
+        # Make a request to the URL
+        response = requests.get(url)
 
-    # Check if the request was successful (status code 200)
-    if response.status_code == 200:
-        # Save the content to a file
-        file_path = f"/tmp/{today}.tsv"
-        with open(file_path, "wb") as file:
-            file.write(response.content)
+        # Check if the request was successful (status code 200)
+        if response.status_code == 200:
+            # Save the content to a file
+            file_path = f"/tmp/{today}.tsv"
+            with open(file_path, "wb") as file:
+                file.write(response.content)
 
-        df = pd.read_csv(file_path, sep="\t")
+            df = pd.read_csv(file_path, sep="\t")
+        else:
+            df = __create_daily_report()
     else:
-        df = __create_daily_report()
+        base_url = 'https://download.brainimagelibrary.org/inventory/daily/reports/today.tsv'
+
+        # Make a request to the URL
+        response = requests.get(url)
+
+        # Check if the request was successful (status code 200)
+        if response.status_code == 200:
+            # Save the content to a file
+            file_path = f"/tmp/today.tsv"
+            with open(file_path, "wb") as file:
+                file.write(response.content)
+
+            df = pd.read_csv(file_path, sep="\t")
+        else:
+            df = pd.DataFrame()
 
     return df
 
