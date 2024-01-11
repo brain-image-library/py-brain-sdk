@@ -100,7 +100,7 @@ def daily(option="simple"):
         base_url = 'https://download.brainimagelibrary.org/inventory/daily/reports/today.tsv'
 
         # Make a request to the URL
-        response = requests.get(url)
+        response = requests.get(base_url)
 
         # Check if the request was successful (status code 200)
         if response.status_code == 200:
