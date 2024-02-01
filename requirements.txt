@@ -1,7 +1,6 @@
-pandas
-requests
-tabulate
-python-magic
+pandas>=2.2.0
+requests==2.31.0
+scholarly==1.7.11
+setuptools==68.2.2
+tqdm==4.66.1
 humanize
-tqdm
-scholarly

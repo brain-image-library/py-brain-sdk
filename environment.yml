@@ -1,0 +1,10 @@
+name: brain-sdk-env  # Replace with your desired environment name
+channels:
+  - defaults
+dependencies:
+  - python=3.6  # Adjust the Python version as needed
+  - pandas=1.4.0
+  - requests=2.26.0
+  - setuptools=68.2.2
+  - tqdm=4.66.1
+  - humanize
