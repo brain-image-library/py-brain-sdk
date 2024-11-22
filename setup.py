@@ -12,7 +12,7 @@ setup(
         "requests",
         "tabulate",
         "python-magic",
-	"tqdm",
+        "tqdm",
         "scholarly",
         "humanize",
     ],

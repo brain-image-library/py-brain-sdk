@@ -1,10 +1,10 @@
 """
-hubmapinventory
+brainimagelibrary
 """
 
-__version__ = "2023.02"  # year 2023 2nd quarter
+__version__ = "1.0"
 __author__ = "Ivan Cao-Berg"
-__credits__ = "HuBMAP IEC Team"
+__credits__ = "Brain Image Library Team"
 
 from .retrieve import *
 from .metadata import *

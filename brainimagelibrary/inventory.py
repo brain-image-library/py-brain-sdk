@@ -5,6 +5,25 @@ import pandas as pd
 
 
 def summary(dataset_id=None):
+    """
+    Summarizes dataset metadata.
+
+    This function retrieves metadata for a dataset and computes summary
+    statistics, including file sizes, counts, and types.
+
+    Args:
+        dataset_id (str, optional): The unique identifier of the dataset. Defaults to None.
+
+    Returns:
+        dict: A dictionary containing the following keys:
+            - `pretty_size` (str): Human-readable size of the dataset.
+            - `size` (int): Total size of the dataset in bytes.
+            - `number_of_files` (int): Number of files in the dataset.
+            - `files` (dict): Detailed file information, including:
+                - `frequencies` (dict): Frequency of file extensions.
+                - `types` (list): Types of files in the dataset.
+                - `sizes` (dict): Size of files grouped by extension.
+    """
     metadata = get(dataset_id=dataset_id)
     manifest = metadata["manifest"]
     df = pd.DataFrame(manifest)
@@ -25,6 +44,19 @@ def summary(dataset_id=None):
 
 
 def __generate_dataset_uuid(directory):
+    """
+    Generates a UUID for a dataset based on its directory path.
+
+    This function computes a consistent UUID for a dataset using the
+    directory path as the seed. The UUID is generated using the UUIDv5
+    algorithm with the DNS namespace.
+
+    Args:
+        directory (str): The absolute or relative path to the dataset directory.
+
+    Returns:
+        str: A string representation of the generated UUID.
+    """
     if directory[-1] == "/":
         directory = directory[:-1]
 
@@ -32,6 +64,24 @@ def __generate_dataset_uuid(directory):
 
 
 def get(dataset_id=None):
+    """
+    Retrieves metadata for a dataset by its ID.
+
+    This function fetches metadata for a dataset from a remote server
+    using its unique identifier. The metadata is retrieved as a JSON
+    response from the Brain Image Library's API.
+
+    Args:
+        dataset_id (str, optional): The unique identifier for the dataset. Defaults to None.
+
+    Returns:
+        dict: A dictionary containing the dataset metadata if the request is successful.
+
+        None: If the request fails or encounters an exception.
+
+    Raises:
+        requests.exceptions.RequestException: If an error occurs during the API request.
+    """
     metadata = by_id(dataset_id)
     directory = metadata["retjson"][0]["Dataset"][0]["bildirectory"]
 
