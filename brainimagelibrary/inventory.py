@@ -86,7 +86,7 @@ def get(dataset_id=None):
     directory = metadata["retjson"][0]["Dataset"][0]["bildirectory"]
 
     filename = f"{__generate_dataset_uuid(directory)}.json"
-    url = f"https://download.brainimagelibrary.org/inventory/{filename}"
+    url = f"https://download.brainimagelibrary.org/inventory/datasets/{filename}"
 
     try:
         response = requests.get(url)
