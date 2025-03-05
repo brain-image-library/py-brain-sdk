@@ -1,7 +1,7 @@
 import requests
 
 def by_affiliation(affiliation, params=None, headers=None):
-    api_url = f"https://api.brainimagelibrary.org/query/contributors?affiliation=Broad{affiliation}"
+    api_url = f"https://api.brainimagelibrary.org/query/contributors?affiliation={affiliation}"
 
     try:
         response = requests.get(api_url, params=params, headers=headers)
