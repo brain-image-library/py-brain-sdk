@@ -2,27 +2,6 @@ import requests
 
 
 def retrieve(dataset_id, params=None, headers=None):
-    """
-    Retrieves detailed metadata for a dataset using its ID.
-
-    This function sends a GET request to the Brain Image Library API
-    to fetch detailed metadata for the specified dataset.
-
-    Args:
-        dataset_id (str): The unique identifier for the dataset.
-        params (dict, optional): Query parameters to include in the API request. Defaults to None.
-        headers (dict, optional): HTTP headers to include in the API request. Defaults to None.
-
-    Returns:
-        dict: A dictionary containing the dataset metadata if the request is successful.
-
-        dict: An empty dictionary if the API response indicates no entry was found.
-
-        None: If the request fails or encounters an exception.
-
-    Raises:
-        requests.exceptions.RequestException: If an error occurs during the API request.
-    """
     api_url = f"https://api.brainimagelibrary.org/retrieve?bildid={dataset_id}"
 
     try:
@@ -42,29 +21,8 @@ def retrieve(dataset_id, params=None, headers=None):
         return None
 
 
-def search(dataset_id, params=None, headers=None):
-    """
-    Searches for metadata of a dataset using its ID.
-
-    This function sends a GET request to the Brain Image Library API
-    to search for metadata associated with the specified dataset.
-
-    Args:
-        dataset_id (str): The unique identifier for the dataset.
-        params (dict, optional): Query parameters to include in the API request. Defaults to None.
-        headers (dict, optional): HTTP headers to include in the API request. Defaults to None.
-
-    Returns:
-        dict: A dictionary containing the dataset metadata if the request is successful.
-
-        dict: An empty dictionary if the API response indicates no entry was found.
-
-        None: If the request fails or encounters an exception.
-
-    Raises:
-        requests.exceptions.RequestException: If an error occurs during the API request.
-    """
-    api_url = f"https://api.brainimagelibrary.org/retrieve?bildid={dataset_id}"
+def query(query_string, params=None, headers=None):
+    api_url = f"https://api.brainimagelibrary.org/query/metadatadivision?metadataelement={query_string}"
 
     try:
         response = requests.get(api_url, params=params, headers=headers)
