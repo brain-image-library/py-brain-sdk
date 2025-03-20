@@ -80,9 +80,11 @@ def daily(option="simple", overwrite=False):
                       empty DataFrame if the download fails.
     """
 
-    def fetch_and_load_csv(url, file_path):
+    def fetch_and_load_csv(url, file_path,overwrite=False):
         """Helper function to download and load a TSV file as a DataFrame."""
         try:
+            if overwrite:
+                return None
             response = requests.get(url)
             if response.status_code == 200:
                 with open(file_path, "wb") as file:
@@ -106,7 +108,7 @@ def daily(option="simple", overwrite=False):
     elif option == "detailed":
         url = "https://download.brainimagelibrary.org/inventory/daily/reports/today.tsv"
         file_path = "/tmp/today.tsv"
-        df = fetch_and_load_csv(url, file_path)
+        df = fetch_and_load_csv(url, file_path, overwrite)
         if df is None:
             print("Failed to fetch detailed daily report. Returning empty DataFrame...")
             df = pd.DataFrame()
