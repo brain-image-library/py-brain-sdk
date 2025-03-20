@@ -101,7 +101,7 @@ def daily(option="simple", overwrite=False):
         today = datetime.today().strftime("%Y%m%d")
         url = f"{base_url}/{today}.tsv"
         file_path = f"/tmp/{today}.tsv"
-        df = fetch_and_load_csv(url, file_path)
+        df = fetch_and_load_csv(url, file_path, overwrite)
         if df is None:
             print("Failed to fetch simple daily report. Creating local report...")
             df = __create_daily_report(overwrite)
