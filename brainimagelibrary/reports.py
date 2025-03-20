@@ -62,7 +62,7 @@ def __get_did(dataset_id):
     }
 
 
-def daily(option="simple"):
+def daily(option="simple", overwrite=False)):
     """
     Retrieves the daily inventory report from the Brain Image Library.
 
@@ -102,7 +102,7 @@ def daily(option="simple"):
         df = fetch_and_load_csv(url, file_path)
         if df is None:
             print("Failed to fetch simple daily report. Creating local report...")
-            df = __create_daily_report()
+            df = __create_daily_report(overwrite)
     elif option == "detailed":
         url = "https://download.brainimagelibrary.org/inventory/daily/reports/today.tsv"
         file_path = "/tmp/today.tsv"
