@@ -116,7 +116,7 @@ def daily(option="simple"):
     return df
 
 
-def __create_daily_report():
+def __create_daily_report(overwrite=False):
     """
     Creates or retrieves the daily inventory report.
 
@@ -141,7 +141,7 @@ def __create_daily_report():
     today = datetime.today().strftime("%Y%m%d")
     output_filename = f"{directory}/{today}.tsv"
 
-    if Path(output_filename).exists():
+    if overwrite == False and Path(output_filename).exists():
         print(f"Daily report {output_filename} found on disk.")
         df = pd.read_csv(output_filename, sep="\t")
         return df
