@@ -62,7 +62,7 @@ def __get_did(dataset_id):
     }
 
 
-def daily(option="simple", overwrite=False)):
+def daily(option="simple", overwrite=False):
     """
     Retrieves the daily inventory report from the Brain Image Library.
 
