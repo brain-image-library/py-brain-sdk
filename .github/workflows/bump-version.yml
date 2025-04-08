@@ -3,7 +3,7 @@ name: Bump Version
 on:
   push:
     branches:
-      - main  # Adjust this to your default branch
+      - main  # Adjust to your default branch
 
 jobs:
   bump-version:
@@ -24,6 +24,6 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add version.txt  # Or version.py
-          git commit -m "Bump version" || echo "No changes to commit"
+          git add setup.py
+          git commit -m "Bump version in setup.py [skip ci]" || echo "No changes to commit"
           git push
