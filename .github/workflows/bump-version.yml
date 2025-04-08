@@ -1,0 +1,29 @@
+name: Bump Version
+
+on:
+  push:
+    branches:
+      - main  # Adjust this to your default branch
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Run version bump script
+        run: python bump_version.py
+
+      - name: Commit updated version
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add version.txt  # Or version.py
+          git commit -m "Bump version" || echo "No changes to commit"
+          git push
