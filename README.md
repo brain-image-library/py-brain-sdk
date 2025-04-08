@@ -1,5 +1,4 @@
-![Status](https://github.com/brain-image-library/py-brain-sdk/actions/workflows/main.yml/badge.svg)
-![Status](https://github.com/brain-image-library/py-brain-sdk/actions/workflows/pretty.yml/badge.svg)
+![Status](https://github.com/brain-image-library/py-brain-sdk/actions/workflows/bump-version.yml/badge.svg)
 ![Issue](https://img.shields.io/github/issues/brain-image-library/py-brain-sdk)
 ![forks](https://img.shields.io/github/forks/brain-image-library/py-brain-sdk)
 ![Stars](https://img.shields.io/github/stars/brain-image-library/py-brain-sdk)
