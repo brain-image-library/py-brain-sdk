@@ -40,7 +40,7 @@ def retrieve(dataset_id, params=None, headers=None):
 
 
 def query(query_string, params=None, headers=None):
-    api_url = f"https://api.brainimagelibrary.org/query/metadatadivision?metadataelement={query_string}"
+    api_url = f"https://api.brainimagelibrary.org/query/fulltext?text={query_string}"
 
     try:
         response = requests.get(api_url, params=params, headers=headers)
