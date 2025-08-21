@@ -67,30 +67,35 @@ def get(dataset_id=None):
     """
     Retrieves metadata for a dataset by its ID.
 
-    This function fetches metadata for a dataset from a remote server
-    using its unique identifier. The metadata is retrieved as a JSON
-    response from the Brain Image Library's API.
-
     Args:
         dataset_id (str, optional): The unique identifier for the dataset. Defaults to None.
 
     Returns:
         dict: A dictionary containing the dataset metadata if the request is successful.
-
         None: If the request fails or encounters an exception.
-
-    Raises:
-        requests.exceptions.RequestException: If an error occurs during the API request.
     """
-    
+    if dataset_id is None:
+        print("Error: dataset_id must be provided.")
+        return None
+
     filename = f"{dataset_id}.json"
     url = f"https://download.brainimagelibrary.org/inventory/datasets/{filename}"
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
 
-        response = response.json()
-        return response
+        # Check if request was successful
+        if response.status_code != 200:
+            print(f"Error: received status code {response.status_code} for {url}")
+            return None
+
+        # Ensure we got JSON
+        try:
+            return response.json()
+        except ValueError:
+            print("Error: Response is not valid JSON.")
+            return None
+
     except requests.exceptions.RequestException as e:
         print(f"Error making API request: {e}")
         return None
