@@ -2,6 +2,9 @@ from .retrieve import *
 import uuid
 import requests
 import pandas as pd
+import gzip
+import io
+import json
 
 
 def summary(dataset_id=None):
@@ -62,38 +65,38 @@ def __generate_dataset_uuid(directory):
 
     return str(uuid.uuid5(uuid.NAMESPACE_DNS, directory))
 
-
 def get(dataset_id=None):
     """
-    Retrieves metadata for a dataset by its ID.
+    Retrieves metadata for a dataset by its ID from a compressed JSON (.json.gz).
 
     Args:
         dataset_id (str, optional): The unique identifier for the dataset. Defaults to None.
 
     Returns:
-        dict: A dictionary containing the dataset metadata if the request is successful.
-        None: If the request fails or encounters an exception.
+        dict | None: Dataset metadata if successful, otherwise None.
     """
     if dataset_id is None:
         print("Error: dataset_id must be provided.")
         return None
 
-    filename = f"{dataset_id}.json"
+    filename = f"{dataset_id}.json.gz"
     url = f"https://download.brainimagelibrary.org/inventory/datasets/{filename}"
 
     try:
-        response = requests.get(url, timeout=30)
-
-        # Check if request was successful
-        if response.status_code != 200:
-            print(f"Error: received status code {response.status_code} for {url}")
+        resp = requests.get(url, timeout=30)
+        if resp.status_code != 200:
+            print(f"Error: received status code {resp.status_code} for {url}")
             return None
 
-        # Ensure we got JSON
         try:
-            return response.json()
-        except ValueError:
-            print("Error: Response is not valid JSON.")
+            with gzip.GzipFile(fileobj=io.BytesIO(resp.content)) as gz:
+                data = json.load(gz)
+            return data
+        except gzip.BadGzipFile:
+            print("Error: Response is not a valid gzip file.")
+            return None
+        except json.JSONDecodeError as e:
+            print(f"Error: Decompressed content is not valid JSON: {e}")
             return None
 
     except requests.exceptions.RequestException as e:
