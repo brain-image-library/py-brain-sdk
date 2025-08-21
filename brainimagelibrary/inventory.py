@@ -82,10 +82,8 @@ def get(dataset_id=None):
     Raises:
         requests.exceptions.RequestException: If an error occurs during the API request.
     """
-    metadata = by_id(dataset_id)
-    directory = metadata["retjson"][0]["Dataset"][0]["bildirectory"]
-
-    filename = f"{__generate_dataset_uuid(directory)}.json"
+    
+    filename = f"{dataset_id}.json"
     url = f"https://download.brainimagelibrary.org/inventory/datasets/{filename}"
 
     try:
