@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="brainimagelibrary",
-    version="0.0.3",
+    version="0.0.4",
     description="Brain Image Library API",
     url="https://github.com/brain-image-library/",
     author="Ivan Cao-Berg",
