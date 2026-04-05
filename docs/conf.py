@@ -27,5 +27,5 @@ napoleon_numpy_docstring = False
 templates_path = ["_templates"]
 exclude_patterns = ["_build"]
 
-html_theme = "alabaster"
+html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
