@@ -1,7 +1,32 @@
-from .retrieve import *
+"""
+reports.py — Daily inventory report generation for the Brain Image Library.
+
+This module builds summary DataFrames across all BIL datasets (metadata
+versions 1.0 and 2.0).  Reports are cached under ``/tmp/``, ``reports/``,
+and ``/bil/data/inventory/daily/`` when those paths are available.
+
+Public functions
+----------------
+daily(option, overwrite)
+    Return today's inventory report as a :class:`pandas.DataFrame`.
+get_bildids()
+    Return all unique dataset IDs across metadata versions 1.0 and 2.0.
+
+Private helpers (not part of the public API)
+---------------------------------------------
+__get_did(dataset_id)
+    Fetch combined metadata + inventory data for a single dataset.
+__create_daily_report(overwrite)
+    Build the daily report locally when the remote download fails.
+"""
+
+import requests
+from .retrieve import by_id, by_version
+from .inventory import get as inventory_get
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 
@@ -43,6 +68,8 @@ def __get_did(dataset_id):
     metadata = by_id(bildid=dataset_id)
     metadata = metadata.get("retjson", [{}])[0]
 
+    inv = inventory_get(dataset_id=dataset_id)
+
     return {
         "metadata_version": safe_get(metadata, ["Submission", "metadata"]),
         "bildid": dataset_id,
@@ -59,33 +86,50 @@ def __get_did(dataset_id):
         "taxonomy": safe_get(metadata, ["Specimen", 0, "ncbitaxonomy"]),
         "genotype": safe_get(metadata, ["Specimen", 0, "genotype"]),
         "samplelocalid": safe_get(metadata, ["Specimen", 0, "samplelocalid"]),
+        "number_of_files": inv.get("number_of_files") if inv else None,
+        "size": inv.get("size") if inv else None,
+        "file_types": inv.get("file_types") if inv else None,
+        "frequencies": inv.get("frequencies") if inv else None,
+        "mime_types": inv.get("mime_types") if inv else None,
     }
 
 
 def daily(option="simple", overwrite=False):
     """
-    Retrieves the daily inventory report from the Brain Image Library.
+    Retrieve the daily inventory report from the Brain Image Library.
 
-    Depending on the `option` parameter, this function downloads either the
-    simple daily inventory or the detailed daily report. If the download fails,
-    it returns a locally created or empty DataFrame.
+    The function follows a three-step fallback strategy:
+
+    1. Load ``/bil/data/inventory/daily/reports/today.json`` from the BIL
+       shared filesystem if it exists (and ``overwrite`` is ``False``).
+    2. If the local file is absent, download the report from the web
+       (URL depends on ``option``).
+    3. If the download also fails, print a warning and fall back to
+       :func:`__create_daily_report` to build the report locally.
 
     Args:
-        option (str, optional): The type of daily report to fetch. Options are:
-            - `"simple"`: Fetches the simple daily inventory (default).
-            - `"detailed"`: Fetches the detailed daily report.
+        option (str, optional): The type of daily report to fetch when falling
+            back to a web download.  Options are:
+
+            - ``"simple"`` *(default)*: Fetches the simple daily inventory TSV
+              from ``download.brainimagelibrary.org/inventory/daily/<YYYYMMDD>.tsv``.
+            - ``"detailed"``: Fetches the pre-built detailed report from
+              ``download.brainimagelibrary.org/inventory/daily/reports/today.tsv``.
+
+        overwrite (bool, optional): When ``True``, skip any cached file on disk
+            and force a fresh download or regeneration.  Defaults to ``False``.
 
     Returns:
-        pd.DataFrame: A DataFrame containing the inventory data. Returns an
-                      empty DataFrame if the download fails.
+        pd.DataFrame: A DataFrame containing the inventory data.
+
+    Raises:
+        ValueError: If ``option`` is not ``"simple"`` or ``"detailed"``.
     """
 
-    def fetch_and_load_csv(url, file_path,overwrite=False):
+    def fetch_and_load_csv(url, file_path):
         """Helper function to download and load a TSV file as a DataFrame."""
         try:
-            if overwrite:
-                return None
-            response = requests.get(url)
+            response = requests.get(url, timeout=30)
             if response.status_code == 200:
                 with open(file_path, "wb") as file:
                     file.write(response.content)
@@ -96,96 +140,131 @@ def daily(option="simple", overwrite=False):
             print(f"Error fetching URL {url}: {e}")
             return None
 
+    if option not in ("simple", "detailed"):
+        raise ValueError(f"Invalid option '{option}'. Choose 'simple' or 'detailed'.")
+
+    # Step 1: try local BIL filesystem JSON cache
+    local_json = Path("/bil/data/inventory/daily/reports/today.json")
+    if not overwrite and local_json.exists():
+        print(f"Loading daily report from {local_json}.")
+        try:
+            return pd.read_json(local_json)
+        except ValueError:
+            print(
+                f"Warning: {local_json} is empty or corrupt, falling back to download."
+            )
+
+    # Step 2: attempt web download
     if option == "simple":
         base_url = "https://download.brainimagelibrary.org/inventory/daily"
         today = datetime.today().strftime("%Y%m%d")
         url = f"{base_url}/{today}.tsv"
         file_path = f"/tmp/{today}.tsv"
-        df = fetch_and_load_csv(url, file_path, overwrite)
-        if df is None:
-            print("Failed to fetch simple daily report. Creating local report...")
-            df = __create_daily_report(overwrite)
-    elif option == "detailed":
+    else:
         url = "https://download.brainimagelibrary.org/inventory/daily/reports/today.tsv"
         file_path = "/tmp/today.tsv"
-        df = fetch_and_load_csv(url, file_path, overwrite)
-        if df is None:
-            print("Failed to fetch detailed daily report. Returning empty DataFrame...")
-            df = pd.DataFrame()
-    else:
-        raise ValueError(f"Invalid option '{option}'. Choose 'simple' or 'detailed'.")
+
+    df = fetch_and_load_csv(url, file_path)
+
+    # Step 3: build from scratch if download failed
+    if df is None:
+        print(
+            f"Cannot download daily report from {url}. Building report from scratch..."
+        )
+        df = __create_daily_report(overwrite)
 
     return df
 
 
 def __create_daily_report(overwrite=False):
     """
-    Creates or retrieves the daily inventory report.
+    Create or load the daily inventory report from local storage.
 
-    This function checks for the existence of a daily inventory report in
-    predefined directories. If the report exists, it is loaded and returned
-    as a DataFrame. If not, the function generates the report by processing
-    datasets in metadata versions 1.0 and 2.0, saves it to disk, and returns
-    it as a DataFrame.
+    Checks for an existing report (``<YYYYMMDD>.tsv``) in the following
+    locations, in order:
+
+    1. ``/bil/data/inventory/daily/`` — BIL shared filesystem (preferred).
+    2. ``reports/`` — local working-directory fallback.
+
+    If no cached file is found (or ``overwrite`` is ``True`` for the BIL path
+    check), the report is generated by iterating over all datasets in metadata
+    versions 1.0 and 2.0 via :func:`__get_did`, deduplicating on ``bildid``,
+    and saving the result as a tab-separated file to both ``reports/`` and, if
+    the path exists, ``/bil/data/inventory/daily/``.
+
+    Args:
+        overwrite (bool, optional): When ``True``, skip the BIL filesystem
+            cache check and regenerate the report from scratch.
+            Defaults to ``False``.
 
     Returns:
         pd.DataFrame: The daily inventory report as a DataFrame.
 
     Side Effects:
-        - Reads daily report files from disk if they exist.
-        - Creates and saves the daily report to disk if it does not exist.
-        - Saves the report to the BRAIN filesystem if available.
-
-    Raises:
-        FileNotFoundError: If directories or files are missing in non-standard cases.
+        - Reads ``<YYYYMMDD>.tsv`` from disk when a cached copy exists.
+        - Creates the ``reports/`` directory if it does not already exist.
+        - Writes ``reports/<YYYYMMDD>.tsv`` after generating a new report.
+        - Writes ``/bil/data/inventory/daily/<YYYYMMDD>.tsv`` when that
+          directory is available on the BIL shared filesystem.
     """
-    directory = "/bil/data/inventory/daily"
     today = datetime.today().strftime("%Y%m%d")
-    output_filename = f"{directory}/{today}.tsv"
 
-    if overwrite == False and Path(output_filename).exists():
-        print(f"Daily report {output_filename} found on disk.")
-        df = pd.read_csv(output_filename, sep="\t")
-        return df
+    if not overwrite:
+        bil_path = Path(f"/bil/data/inventory/daily/{today}.tsv")
+        if bil_path.exists():
+            print(f"Daily report {bil_path} found on disk.")
+            return pd.read_csv(bil_path, sep="\t")
 
-    directory = "reports"
-    today = datetime.today().strftime("%Y%m%d")
-    output_filename = f"{directory}/{today}.tsv"
+        local_path = Path(f"reports/{today}.tsv")
+        if local_path.exists():
+            print(f"Daily report {local_path} found on disk.")
+            return pd.read_csv(local_path, sep="\t")
 
-    if Path(output_filename).exists():
-        print(f"Daily report {output_filename} found on disk.")
-        df = pd.read_csv(output_filename, sep="\t")
-        return df
+    all_datasets = get_bildids()
 
+    print(f"Processing {len(all_datasets)} unique datasets in parallel")
     data = []
+    with ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(__get_did, dataset): dataset for dataset in all_datasets
+        }
+        for future in tqdm(as_completed(futures), total=len(futures)):
+            try:
+                result = future.result()
+                if result is not None:
+                    data.append(result)
+            except Exception as e:
+                dataset_id = futures[future]
+                print(f"Warning: failed to fetch dataset {dataset_id}: {e}")
 
-    print(f"Processing datasets in metadata version 1.0")
-    v1 = by_version(version="1.0")
-    for dataset in tqdm(v1):
-        data.append(__get_did(dataset))
+    df = pd.DataFrame(data).drop_duplicates(subset=["bildid"])
 
-    print(f"Processing datasets in metadata version 2.0")
-    v1 = by_version(version="2.0")
-    for dataset in tqdm(v1):
-        data.append(__get_did(dataset))
+    reports_dir = Path("reports")
+    reports_dir.mkdir(exist_ok=True)
+    df.to_csv(reports_dir / f"{today}.tsv", sep="\t", index=False)
 
-    df = pd.DataFrame(data)
-
-    directory = "reports"
-    if not Path(directory).exists():
-        Path(directory).mkdir()
-
-    today = datetime.today().strftime("%Y%m%d")
-    output_filename = f"{directory}/{today}.tsv"
-
-    if not Path(directory).exists():
-        Path(directory).mkdir()
-    df.to_csv(output_filename, sep="\t", index=False)
-
-    # save to BRAIN file system
-    directory = "/bil/data/inventory/daily"
-    if Path(directory).exists():
-        output_filename = f"{directory}/{today}.tsv"
-        df.to_csv(output_filename, sep="\t", index=False)
+    # save to BIL shared filesystem
+    bil_dir = Path("/bil/data/inventory/daily")
+    if bil_dir.exists():
+        df.to_csv(bil_dir / f"{today}.tsv", sep="\t", index=False)
 
     return df
+
+
+def get_bildids():
+    """
+    Retrieve all dataset IDs from the Brain Image Library across metadata versions.
+
+    Fetches dataset ID lists for metadata versions 1.0 and 2.0 in parallel,
+    then returns the combined deduplicated list.
+
+    Returns:
+        list[str]: All unique BIL dataset IDs across v1.0 and v2.0 metadata.
+    """
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_v1 = executor.submit(lambda: list(by_version(version="1.0")))
+        future_v2 = executor.submit(lambda: list(by_version(version="2.0")))
+        datasets_v1 = future_v1.result()
+        datasets_v2 = future_v2.result()
+
+    return list(dict.fromkeys(datasets_v1 + datasets_v2))

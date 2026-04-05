@@ -11,3 +11,4 @@ from .metadata import *
 from .reports import *
 from .inventory import *
 from .dois import *
+from .summary import *

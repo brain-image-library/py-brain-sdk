@@ -136,6 +136,20 @@ def by_version(version="2.0"):
 
 
 def get_all_bildids():
+    """
+    Retrieves all dataset IDs from the Brain Image Library.
+
+    Fetches dataset IDs for both metadata version 1.0 and 2.0, then returns
+    the v2.0 list. The v1.0 list is fetched but currently unused.
+
+    Returns:
+        list: A list of dataset IDs (``bildids``) from metadata version 2.0.
+        None: If the underlying API request fails.
+
+    Example:
+        >>> ids = get_all_bildids()
+        >>> print(ids[:5])
+    """
     v2 = by_version(version="2.0")
     v1 = by_version(version="1.0")
 
