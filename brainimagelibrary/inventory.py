@@ -1,5 +1,4 @@
 from .retrieve import *
-import uuid
 import requests
 import pandas as pd
 import gzip
@@ -11,18 +10,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
 
-def summary(dataset_id=None):
+def summary(bildid=None):
     """
-    Summarizes dataset metadata.
+    Summarizes inventory information for a dataset.
 
-    This function retrieves metadata for a dataset and computes summary
+    Retrieves inventory information for a dataset and computes summary
     statistics, including file sizes, counts, and types.
 
     Args:
-        dataset_id (str, optional): The unique identifier of the dataset. Defaults to None.
+        bildid (str, optional): The unique identifier of the dataset. Defaults to None.
 
     Returns:
-        dict: A dictionary containing the following keys:
+        dict | None: A dictionary containing the following keys, or None if the
+            dataset cannot be retrieved:
             - `pretty_size` (str): Human-readable size of the dataset.
             - `size` (int): Total size of the dataset in bytes.
             - `number_of_files` (int): Number of files in the dataset.
@@ -30,8 +30,18 @@ def summary(dataset_id=None):
                 - `frequencies` (dict): Frequency of file extensions.
                 - `types` (list): Types of files in the dataset.
                 - `sizes` (dict): Size of files grouped by extension.
+
+    Example:
+        >>> from brainimagelibrary import inventory
+        >>> info = inventory.summary(bildid="act-bag")
+        >>> print(info["pretty_size"])
+        '1.2 GB'
+        >>> print(info["number_of_files"])
+        42
+        >>> print(list(info["files"].keys()))
+        ['frequencies', 'types', 'sizes']
     """
-    metadata = get(dataset_id=dataset_id)
+    metadata = get(bildid=bildid)
     manifest = metadata["manifest"]
     df = pd.DataFrame(manifest)
 
@@ -50,38 +60,23 @@ def summary(dataset_id=None):
     return data
 
 
-def __generate_dataset_uuid(directory):
-    """
-    Generates a UUID for a dataset based on its directory path.
-
-    This function computes a consistent UUID for a dataset using the
-    directory path as the seed. The UUID is generated using the UUIDv5
-    algorithm with the DNS namespace.
-
-    Args:
-        directory (str): The absolute or relative path to the dataset directory.
-
-    Returns:
-        str: A string representation of the generated UUID.
-    """
-    if directory[-1] == "/":
-        directory = directory[:-1]
-
-    return str(uuid.uuid5(uuid.NAMESPACE_DNS, directory))
-
-
 class DatasetInventory(dict):
-    """A dict subclass returned by get() that supports method chaining."""
+    """
+    A dict subclass representing a dataset's inventory, returned by :func:`get`.
 
-    def __init__(self, data, dataset_id):
+    Provides convenient methods for exporting and downloading dataset files
+    without needing to call module-level functions separately.
+    """
+
+    def __init__(self, data, bildid):
         super().__init__(data)
-        self._dataset_id = dataset_id
+        self._bildid = bildid
 
     def to_manifest(self, checksum="md5"):
         """
         Writes a manifest file for this dataset.
 
-        Writes a tab-separated file named ``<dataset_id>.manifest`` with
+        Writes a tab-separated file named ``<bildid>.manifest`` with
         columns ``URL`` and the selected checksum column.
 
         Args:
@@ -90,15 +85,24 @@ class DatasetInventory(dict):
 
         Returns:
             str | None: Path to the written manifest file, or None on failure.
+
+        Example:
+            >>> from brainimagelibrary import inventory
+            >>> dataset = inventory.get(bildid="act-bag")
+            >>> path = dataset.to_manifest(checksum="md5")
+            >>> print(path)
+            'act-bag.manifest'
         """
         valid_checksums = ("md5", "sha256", "xxh64", "b2sum")
         if checksum not in valid_checksums:
-            print(f"Error: checksum must be one of {valid_checksums}, got '{checksum}'.")
+            print(
+                f"Error: checksum must be one of {valid_checksums}, got '{checksum}'."
+            )
             return None
 
         manifest = self.get("manifest", [])
         if not manifest:
-            print(f"Error: no manifest entries found for dataset '{self._dataset_id}'.")
+            print(f"Error: no manifest entries found for dataset '{self._bildid}'.")
             return None
 
         df = pd.DataFrame(manifest)
@@ -106,36 +110,63 @@ class DatasetInventory(dict):
             df[checksum] = ""
 
         df = df[["download_url", checksum]].rename(columns={"download_url": "URL"})
-        output_path = f"{self._dataset_id}.manifest"
+        output_path = f"{self._bildid}.manifest"
         df.to_csv(output_path, sep="\t", index=False)
         return output_path
 
-    def download(self, n=2):
+    def download(self, n=2, extensions=None):
         """
-        Downloads all files in this dataset's manifest to a local folder.
+        Downloads files in this dataset's manifest to a local folder.
 
-        Files are saved under ``<dataset_id>/`` preserving the path structure
+        Files are saved under ``<bildid>/`` preserving the path structure
         from the download URL. Files that already exist on disk are skipped.
         Partial downloads (``.part`` files) are resumed automatically using
         HTTP range requests when the server supports it.
 
         Args:
             n (int): Number of concurrent downloads. Defaults to 2.
+            extensions (list | str | None): File extension(s) to filter downloads,
+                e.g. ``'png'`` or ``['png', 'tif']``. If None, all files are downloaded.
 
         Returns:
             str: Path to the download folder.
+
+        Example:
+            >>> from brainimagelibrary import inventory
+            >>> dataset = inventory.get(bildid="act-bag")
+            >>> folder = dataset.download(n=4)
+            >>> print(folder)
+            'act-bag'
+            >>> folder = dataset.download(n=4, extensions='png')
+            >>> folder = dataset.download(n=4, extensions=['png', 'tif'])
         """
         manifest = self.get("manifest", [])
         if not manifest:
-            print(f"Error: no manifest entries found for dataset '{self._dataset_id}'.")
+            print(f"Error: no manifest entries found for dataset '{self._bildid}'.")
             return None
 
-        folder = self._dataset_id
+        folder = self._bildid
         os.makedirs(folder, exist_ok=True)
 
-        urls = [entry.get("download_url") for entry in manifest if entry.get("download_url")]
+        if extensions is not None:
+            if isinstance(extensions, str):
+                extensions = [extensions]
+            extensions = {ext.lstrip(".").lower() for ext in extensions}
+
+        urls = [
+            entry.get("download_url")
+            for entry in manifest
+            if entry.get("download_url")
+            and (
+                extensions is None
+                or os.path.splitext(entry.get("download_url", ""))[1]
+                .lstrip(".")
+                .lower()
+                in extensions
+            )
+        ]
         if not urls:
-            print(f"Error: no download URLs found for dataset '{self._dataset_id}'.")
+            print(f"Error: no download URLs found for dataset '{self._bildid}'.")
             return folder
 
         results = {"ok": 0, "skipped": 0, "failed": 0}
@@ -213,48 +244,96 @@ class DatasetInventory(dict):
         return folder
 
 
-def to_manifest(dataset_id=None, checksum="md5"):
+def to_manifest(bildid=None, checksum="md5"):
     """
-    Retrieves a dataset inventory and writes a manifest file.
+    Writes a manifest file for a dataset.
 
-    Calls get() for the given dataset_id and writes a tab-separated file
-    named ``<dataset_id>.manifest`` with columns ``URL`` and the selected
-    checksum column.
+    Retrieves inventory information for the given ``bildid`` and writes a
+    tab-separated file named ``<bildid>.manifest`` with columns ``URL`` and
+    the selected checksum column.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset. Defaults to None.
-        checksum (str): Checksum column to include. One of 'md5', 'sha256',
-            'xxh64', or 'b2sum'. Defaults to 'md5'.
+        bildid (str, optional): The unique identifier for the dataset. Defaults to None.
+        checksum (str): Checksum column to include. One of ``'md5'``, ``'sha256'``,
+            ``'xxh64'``, or ``'b2sum'``. Defaults to ``'md5'``.
 
     Returns:
         str | None: Path to the written manifest file, or None on failure.
+
+    Example:
+        >>> from brainimagelibrary import inventory
+        >>> path = inventory.to_manifest(bildid="act-bag", checksum="md5")
+        >>> print(path)
+        'act-bag.manifest'
+        >>> path_sha = inventory.to_manifest(bildid="act-bag", checksum="sha256")
+        >>> print(path_sha)
+        'act-bag.manifest'
     """
-    if dataset_id is None:
-        print("Error: dataset_id must be provided.")
+    if bildid is None:
+        print("Error: bildid must be provided.")
         return None
 
-    data = get(dataset_id=dataset_id)
+    data = get(bildid=bildid)
     if data is None:
         return None
 
     return data.to_manifest(checksum=checksum)
 
 
-def get(dataset_id=None):
+def has(bildid=None):
     """
-    Retrieves metadata for a dataset by its ID from a compressed JSON (.json.gz).
+    Checks whether the inventory file for a dataset exists and is accessible.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset. Defaults to None.
+        bildid (str, optional): The unique identifier for the dataset. Defaults to None.
 
     Returns:
-        dict | None: Dataset metadata if successful, otherwise None.
+        bool: True if the compressed JSON file exists and is accessible, False otherwise.
+
+    Example:
+        >>> from brainimagelibrary import inventory
+        >>> inventory.has(bildid="act-bag")
+        True
+        >>> inventory.has(bildid="nonexistent-id")
+        False
     """
-    if dataset_id is None:
-        print("Error: dataset_id must be provided.")
+    if bildid is None:
+        return False
+
+    url = f"https://download.brainimagelibrary.org/inventory/datasets/JSON/{bildid}.json.gz"
+
+    try:
+        resp = requests.head(url, timeout=30)
+        return resp.status_code == 200
+    except requests.exceptions.RequestException:
+        return False
+
+
+def get(bildid=None):
+    """
+    Retrieves inventory information for a dataset by its ID from a compressed JSON (.json.gz).
+
+    Args:
+        bildid (str, optional): The unique identifier for the dataset. Defaults to None.
+
+    Returns:
+        dict | None: Dataset inventory information if successful, otherwise None.
+
+    Example:
+        >>> from brainimagelibrary import inventory
+        >>> data = inventory.get(bildid="act-bag")
+        >>> print(data["number_of_files"])
+        42
+        >>> print(data["pretty_size"])
+        '1.2 GB'
+        >>> print(list(data.keys()))
+        ['number_of_files', 'size', 'pretty_size', 'manifest', 'file_types', 'frequencies', 'mime_types']
+    """
+    if bildid is None:
+        print("Error: bildid must be provided.")
         return None
 
-    filename = f"{dataset_id}.json.gz"
+    filename = f"{bildid}.json.gz"
     url = f"https://download.brainimagelibrary.org/inventory/datasets/JSON/{filename}"
 
     try:
@@ -270,7 +349,7 @@ def get(dataset_id=None):
                 data = json.loads(raw)
             except json.JSONDecodeError:
                 data = ast.literal_eval(raw.decode("utf-8"))
-            return DatasetInventory(data, dataset_id)
+            return DatasetInventory(data, bildid)
         except gzip.BadGzipFile:
             print("Error: Response is not a valid gzip file.")
             return None
