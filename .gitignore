@@ -16,6 +16,9 @@ venv/
 .idea/
 .vscode/
 
+# Sphinx documentation build output
+docs/_build/
+
 # Miscellaneous
 *.DS_Store
 Thumbs.db
