@@ -1,0 +1,19 @@
+name: brainimagelibrary
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.9
+  - pandas>=1.3.0
+  - requests>=2.25.0
+  - tabulate>=0.8.0
+  - humanize>=3.0.0
+  - tqdm>=4.60.0
+  - sphinx>=4.0.0
+  - sphinx-autodoc-typehints>=1.12.0
+  - black>=22.0.0
+  - ipython>=8.0.0
+  - pip
+  - pip:
+    - python-magic>=0.4.0
+    - scholarly>=1.7.0
