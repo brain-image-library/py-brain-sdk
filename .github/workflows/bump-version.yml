@@ -3,27 +3,58 @@ name: Bump Version
 on:
   push:
     branches:
-      - main  # Adjust to your default branch
+      - main
 
 jobs:
   bump-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          fetch-depth: 0
 
-      - name: Run version bump script
-        run: python bump_version.py
+      - name: Bump patch version in setup.py and capture new version
+        id: version
+        run: |
+          python - <<'EOF'
+          import re, pathlib, os
 
-      - name: Commit updated version
+          setup = pathlib.Path("setup.py")
+          content = setup.read_text(encoding="utf-8")
+
+          m = re.search(r'version="(\d+)\.(\d+)\.(\d+)"', content)
+          if not m:
+              raise SystemExit("No version string found in setup.py")
+
+          major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+          new_version = f"{major}.{minor}.{patch + 1}"
+
+          setup.write_text(
+              re.sub(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"', content),
+              encoding="utf-8",
+          )
+          print(f"Bumped version: {m.group(1)}.{m.group(2)}.{m.group(3)} → {new_version}")
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
+              fh.write(f"new_version={new_version}\n")
+          EOF
+
+      - name: Commit and tag new version
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add setup.py
-          git commit -m "Bump version in setup.py [skip ci]" || echo "No changes to commit"
+          git commit -m "Bump version to v${{ steps.version.outputs.new_version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.new_version }}"
           git push
+          git push origin "v${{ steps.version.outputs.new_version }}"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.new_version }}"
+          name: "v${{ steps.version.outputs.new_version }}"
+          generate_release_notes: true
