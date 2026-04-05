@@ -1,1 +1,2 @@
-black
+black>=22.0.0
+ipython>=8.0.0
