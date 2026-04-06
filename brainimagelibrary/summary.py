@@ -47,10 +47,7 @@ def daily(option="simple", overwrite=False):
         "metadata_version": report["metadata_version"].value_counts(),
         "number_of_datasets": len(report),
         "number_of_unique_contributors": report["contributor"].nunique(),
-        "contributors": report["contributor"].value_counts(),
         "number_of_unique_affiliations": report["affiliation"].nunique(),
-        "affiliations": report["affiliation"].value_counts(),
         "number_of_unique_species": report["species"].nunique(),
-        "species": report["species"].value_counts(),
         "number_of_files": int(report["number_of_files"].sum()),
     }
