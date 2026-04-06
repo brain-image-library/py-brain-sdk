@@ -32,6 +32,11 @@ jobs:
           new_version = f"{major}.{minor}.{patch + 1}"
           updated = re.sub(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"', content)
           Path("setup.py").write_text(updated)
+
+          init_content = Path("brainimagelibrary/__init__.py").read_text()
+          init_updated = re.sub(r'__version__ = "[^"]+"', f'__version__ = "{new_version}"', init_content)
+          Path("brainimagelibrary/__init__.py").write_text(init_updated)
+
           print(new_version)
           EOF
           )
@@ -41,8 +46,8 @@ jobs:
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add setup.py
-          git commit -m "Bump version in setup.py [skip ci]" || echo "No changes to commit"
+          git add setup.py brainimagelibrary/__init__.py
+          git commit -m "Bump version in setup.py and __init__.py [skip ci]" || echo "No changes to commit"
           git push
 
       - name: Create GitHub release
