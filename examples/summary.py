@@ -1,24 +1,29 @@
 """
-summary.py — Print a high-level summary of a BIL dataset's inventory.
+summary.py — Print a high-level summary of the BIL daily inventory.
 
-Fetches the dataset inventory and computes aggregate statistics:
-    - Human-readable total size
-    - Total file count
-    - File-type frequencies and per-extension size breakdown
+Fetches today's inventory report and prints aggregate statistics:
+    - Total number of datasets
+    - Total number of files
+    - Unique contributor, affiliation, and species counts
+    - Metadata version breakdown
 
 Usage:
     python examples/summary.py
 """
 
 import brainimagelibrary as brainzzz
-from pprint import pprint
 
-dataset_id = "act-bag"
-
-print(f"Fetching inventory summary for dataset: {dataset_id}")
-result = brainzzz.inventory.summary(dataset_id=dataset_id)
+print("Fetching daily BIL summary...")
+result = brainzzz.summary.daily()
 
 if result is None:
-    print(f"Summary not available for dataset '{dataset_id}'.")
+    print("Summary not available.")
 else:
-    pprint(result)
+    print(f"Number of datasets          : {result['number_of_datasets']}")
+    print(f"Total files                 : {result['number_of_files']}")
+    print(f"Unique contributors         : {result['number_of_unique_contributors']}")
+    print(f"Unique affiliations         : {result['number_of_unique_affiliations']}")
+    print(f"Unique species              : {result['number_of_unique_species']}")
+    print()
+    print("=== Metadata Versions ===")
+    print(result["metadata_version"].to_string())
