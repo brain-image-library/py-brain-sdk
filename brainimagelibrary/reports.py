@@ -14,7 +14,7 @@ get_bildids()
 
 Private helpers (not part of the public API)
 ---------------------------------------------
-__get_did(dataset_id)
+__get_did(bildid)
     Fetch combined metadata + inventory data for a single dataset.
 __create_daily_report(overwrite)
     Build the daily report locally when the remote download fails.
@@ -30,12 +30,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
 
-def __get_did(dataset_id):
+def __get_did(bildid):
     """
     Retrieves detailed metadata for a dataset by its ID.
 
     Args:
-        dataset_id (str): The unique identifier of the dataset.
+        bildid (str): The unique identifier of the dataset.
 
     Returns:
         dict: A dictionary containing the dataset metadata, including:
@@ -65,14 +65,14 @@ def __get_did(dataset_id):
         except (KeyError, IndexError, TypeError):
             return default
 
-    metadata = by_id(bildid=dataset_id)
+    metadata = by_id(bildid=bildid)
     metadata = metadata.get("retjson", [{}])[0]
 
-    inv = inventory_get(dataset_id=dataset_id)
+    inv = inventory_get(bildid=bildid)
 
     return {
         "metadata_version": safe_get(metadata, ["Submission", "metadata"]),
-        "bildid": dataset_id,
+        "bildid": bildid,
         "bildate": safe_get(metadata, ["Submission", "bildate"]),
         "contributor": safe_get(metadata, ["Contributors", 0, "contributorname"]),
         "affiliation": safe_get(metadata, ["Contributors", 0, "affiliation"]),
@@ -124,6 +124,17 @@ def daily(option="simple", overwrite=False):
 
     Raises:
         ValueError: If ``option`` is not ``"simple"`` or ``"detailed"``.
+
+    Example:
+        >>> from brainimagelibrary import reports
+        >>> df = reports.daily(option="simple")
+        >>> print(df.columns.tolist())
+        ['bildid', 'contributor', 'affiliation', 'species', 'generalmodality', ...]
+        >>> print(len(df))
+        1500
+        >>> df_detail = reports.daily(option="detailed", overwrite=True)
+        >>> print(type(df_detail))
+        <class 'pandas.core.frame.DataFrame'>
     """
 
     def fetch_and_load_csv(url, file_path):
@@ -234,8 +245,8 @@ def __create_daily_report(overwrite=False):
                 if result is not None:
                     data.append(result)
             except Exception as e:
-                dataset_id = futures[future]
-                print(f"Warning: failed to fetch dataset {dataset_id}: {e}")
+                bildid = futures[future]
+                print(f"Warning: failed to fetch dataset {bildid}: {e}")
 
     df = pd.DataFrame(data).drop_duplicates(subset=["bildid"])
 
@@ -260,6 +271,16 @@ def get_bildids():
 
     Returns:
         list[str]: All unique BIL dataset IDs across v1.0 and v2.0 metadata.
+
+    Example:
+        >>> from brainimagelibrary import reports
+        >>> ids = reports.get_bildids()
+        >>> print(type(ids))
+        <class 'list'>
+        >>> print(ids[:3])
+        ['act-bag', 'another-id', 'third-id']
+        >>> print(len(ids) > 0)
+        True
     """
     with ThreadPoolExecutor(max_workers=2) as executor:
         future_v1 = executor.submit(lambda: list(by_version(version="1.0")))

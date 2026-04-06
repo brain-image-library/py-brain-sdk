@@ -20,6 +20,16 @@ def daily(option="simple", overwrite=False):
             - ``affiliations``: Value counts of contributor affiliations.
             - ``species``: Value counts of species.
             - ``number_of_files``: Placeholder (None); not yet implemented.
+
+    Example:
+        >>> from brainimagelibrary import summary
+        >>> report = summary.daily(option="simple")
+        >>> print(type(report))
+        <class 'dict'>
+        >>> print(list(report.keys()))
+        ['metadata_version', 'number_of_datasets', 'contributors', 'affiliations', 'species', 'number_of_files']
+        >>> print(report["number_of_datasets"] > 0)
+        True
     """
     report = reports.daily(option=option, overwrite=overwrite)
     return {

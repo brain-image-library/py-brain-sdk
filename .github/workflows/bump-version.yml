@@ -1,60 +1,54 @@
-name: Bump Version
+name: Bump Version!
 
 on:
   push:
     branches:
-      - main
+      - main  # Adjust to your default branch
 
 jobs:
   bump-version:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          fetch-depth: 0
+          python-version: '3.x'
 
-      - name: Bump patch version in setup.py and capture new version
-        id: version
+      - name: Run version bump script
+        id: bump
         run: |
-          python - <<'EOF'
-          import re, pathlib, os
+          NEW_VERSION=$(python - <<'EOF'
+          import re
+          from pathlib import Path
 
-          setup = pathlib.Path("setup.py")
-          content = setup.read_text(encoding="utf-8")
-
-          m = re.search(r'version="(\d+)\.(\d+)\.(\d+)"', content)
-          if not m:
-              raise SystemExit("No version string found in setup.py")
-
-          major, minor, patch = int(m.group(1)), int(m.group(2)), int(m.group(3))
+          content = Path("setup.py").read_text()
+          match = re.search(r'version="(\d+)\.(\d+)\.(\d+)"', content)
+          if not match:
+              raise SystemExit("Could not find version in setup.py")
+          major, minor, patch = int(match.group(1)), int(match.group(2)), int(match.group(3))
           new_version = f"{major}.{minor}.{patch + 1}"
-
-          setup.write_text(
-              re.sub(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"', content),
-              encoding="utf-8",
-          )
-          print(f"Bumped version: {m.group(1)}.{m.group(2)}.{m.group(3)} → {new_version}")
-
-          with open(os.environ["GITHUB_OUTPUT"], "a") as fh:
-              fh.write(f"new_version={new_version}\n")
+          updated = re.sub(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"', content)
+          Path("setup.py").write_text(updated)
+          print(new_version)
           EOF
+          )
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Commit and tag new version
+      - name: Commit updated version
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add setup.py
-          git commit -m "Bump version to v${{ steps.version.outputs.new_version }} [skip ci]"
-          git tag "v${{ steps.version.outputs.new_version }}"
+          git commit -m "Bump version in setup.py [skip ci]" || echo "No changes to commit"
           git push
-          git push origin "v${{ steps.version.outputs.new_version }}"
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: "v${{ steps.version.outputs.new_version }}"
-          name: "v${{ steps.version.outputs.new_version }}"
-          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.bump.outputs.new_version }}" \
+            --title "v${{ steps.bump.outputs.new_version }}" \
+            --generate-notes

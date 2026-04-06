@@ -23,8 +23,12 @@ def by_id(bildid=None, params=None, headers=None):
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> metadata = by_id(bildid="bat-cat-hat")
-        >>> print(metadata)
+        >>> from brainimagelibrary import retrieve
+        >>> metadata = retrieve.by_id(bildid="act-bag")
+        >>> print(type(metadata))
+        <class 'dict'>
+        >>> print("retjson" in metadata)
+        True
     """
     if not bildid:
         return {}
@@ -69,8 +73,12 @@ def by_directory(directory=None, params=None, headers=None):
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> metadata = by_directory(directory="/path/to/dataset")
-        >>> print(metadata)
+        >>> from brainimagelibrary import retrieve
+        >>> metadata = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
+        >>> print(type(metadata))
+        <class 'dict'>
+        >>> print("retjson" in metadata)
+        True
     """
     if not directory:
         return {}
@@ -114,8 +122,12 @@ def by_version(version="2.0"):
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> dataset_ids = by_version(version="1.0")
-        >>> print(dataset_ids)
+        >>> from brainimagelibrary import retrieve
+        >>> ids = retrieve.by_version(version="1.0")
+        >>> print(type(ids))
+        <class 'list'>
+        >>> print(len(ids) > 0)
+        True
     """
     api_url = f"https://api.brainimagelibrary.org/query/submission?metadata={version}"
 
@@ -147,8 +159,12 @@ def get_all_bildids():
         None: If the underlying API request fails.
 
     Example:
-        >>> ids = get_all_bildids()
-        >>> print(ids[:5])
+        >>> from brainimagelibrary import retrieve
+        >>> ids = retrieve.get_all_bildids()
+        >>> print(type(ids))
+        <class 'list'>
+        >>> print(len(ids) > 0)
+        True
     """
     v2 = by_version(version="2.0")
     v1 = by_version(version="1.0")

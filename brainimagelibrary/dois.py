@@ -1,93 +1,102 @@
 import requests
-from scholarly import scholarly
+
+DOI_PREFIX = "10.35077"
 
 
-def get_number_of_citations(dataset_id="act-bag"):
+def get_number_of_citations(bildid="act-bag"):
     """
     Retrieves the number of citations for a specific dataset.
 
     This function gathers citation data for a given dataset by querying multiple
-    sources, such as DataCite and Google Scholar.
+    sources, such as DataCite and OpenCitations.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset.
+        bildid (str, optional): The unique identifier for the dataset.
             Defaults to "act-bag".
 
     Returns:
         dict: A dictionary containing citation counts from different sources:
-            - `datacite` (int): Citation count from DataCite.
-            - `gscholar` (int): Citation count from Google Scholar.
+            - `datacite` (int): Citation count from DataCite, or None if unavailable.
+            - `opencitations` (int): Citation count from OpenCitations, or None if unavailable.
+        None: If both sources fail to return citation data.
 
     Example:
-        >>> citations = get_number_of_citations(dataset_id="my-dataset")
-        >>> print(citations)
-        {'datacite': 12, 'gscholar': 5}
+        >>> from brainimagelibrary import dois
+        >>> citations = dois.get_number_of_citations(bildid="act-bag")
+        >>> print(type(citations))
+        <class 'dict'>
+        >>> print(list(citations.keys()))
+        ['datacite', 'opencitations']
     """
-    data = {}
-    data["datacite"] = __get_number_of_citations_from_datacite(dataset_id=dataset_id)
-    data["gscholar"] = __get_number_of_citations_from_gscholar(dataset_id=dataset_id)
+    datacite = __get_number_of_citations_from_datacite(bildid=bildid)
+    opencitations = __get_number_of_citations_from_opencitations(bildid=bildid)
 
-    return data
+    if datacite is None and opencitations is None:
+        return None
+
+    return {"datacite": datacite, "opencitations": opencitations}
 
 
-def get_metadata(dataset_id="act-bag"):
+def get_metadata(bildid="act-bag"):
     """
-    Retrieves metadata for a specific dataset.
-
-    This function fetches metadata for a given dataset by querying the DataCite API.
+    Retrieves metadata for a specific dataset from the DataCite API.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset.
+        bildid (str, optional): The unique identifier for the dataset.
             Defaults to "act-bag".
 
     Returns:
         dict: A dictionary containing the metadata for the dataset, as retrieved
               from the DataCite API.
+        None: If the API request fails or the dataset is not found.
 
     Example:
-        >>> metadata = get_metadata(dataset_id="my-dataset")
-        >>> print(metadata)
-        {'title': 'Dataset Title', 'authors': ['Author A', 'Author B'], ...}
+        >>> from brainimagelibrary import dois
+        >>> metadata = dois.get_metadata(bildid="act-bag")
+        >>> print(type(metadata))
+        <class 'dict'>
+        >>> print("data" in metadata)
+        True
     """
-    return __get_datacite_metadata(dataset_id=dataset_id)
+    return __get_datacite_metadata(bildid=bildid)
 
 
-def __get_number_of_citations_from_gscholar(dataset_id="act-bag"):
+def __get_number_of_citations_from_opencitations(bildid="act-bag"):
     """
-    Retrieves the number of citations for a dataset from Google Scholar.
+    Retrieves the number of citations for a dataset from OpenCitations.
 
-    This function queries Google Scholar to fetch the number of citations for a
-    given dataset using its DOI prefix and dataset ID.
+    Queries the OpenCitations COCI REST API using the dataset's DOI.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset.
+        bildid (str, optional): The unique identifier for the dataset.
             Defaults to "act-bag".
 
     Returns:
-        int: The number of citations if the dataset is found on Google Scholar.
+        int: The number of citations if the dataset is found on OpenCitations.
         None: If no citation data is found or if an error occurs.
 
-    Raises:
-        StopIteration: If the query does not return any results.
-        Exception: If an unexpected error occurs during the query.
-
     Example:
-        >>> citations = __get_number_of_citations_from_gscholar(dataset_id="my-dataset")
-        >>> print(citations)
-        42
+        >>> from brainimagelibrary import dois
+        >>> citations = dois.__get_number_of_citations_from_opencitations(bildid="act-bag")
+        >>> print(type(citations))
+        <class 'int'>
+        >>> print(citations >= 0)
+        True
     """
-    brain = "10.35077"
-    query = f"{brain}/{dataset_id}"
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://opencitations.net/index/coci/api/v1/citation-count/{doi}"
 
     try:
-        search_query = scholarly.search_pubs(query)
-        metadata = next(search_query)
-        return metadata["num_citations"]
-    except:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        return int(data[0]["count"])
+    except (IndexError, KeyError, ValueError, requests.exceptions.RequestException):
         return None
 
 
-def __get_number_of_citations_from_datacite(dataset_id="act-bag"):
+def __get_number_of_citations_from_datacite(bildid="act-bag"):
     """
     Retrieves the number of citations for a dataset from DataCite.
 
@@ -95,32 +104,33 @@ def __get_number_of_citations_from_datacite(dataset_id="act-bag"):
     extracts the citation count.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset.
+        bildid (str, optional): The unique identifier for the dataset.
             Defaults to "act-bag".
 
     Returns:
         int: The number of citations for the dataset if available.
         None: If no citation data is found or if an error occurs.
 
-    Raises:
-        KeyError: If the expected fields are missing in the DataCite metadata.
-        Exception: If an unexpected error occurs during the metadata retrieval.
-
     Example:
-        >>> citations = __get_number_of_citations_from_datacite(dataset_id="my-dataset")
-        >>> print(citations)
-        25
+        >>> from brainimagelibrary import dois
+        >>> citations = dois.__get_number_of_citations_from_datacite(bildid="act-bag")
+        >>> print(type(citations))
+        <class 'int'>
+        >>> print(citations >= 0)
+        True
     """
-    metadata = __get_datacite_metadata(dataset_id=dataset_id)
+    metadata = __get_datacite_metadata(bildid=bildid)
+
+    if metadata is None:
+        return None
 
     try:
         return metadata["data"]["attributes"]["citationCount"]
-    except:
-        # print(f'Unable to retrieve metadata for {dataset_id}')
+    except (KeyError, TypeError):
         return None
 
 
-def __get_datacite_metadata(dataset_id="act-bag"):
+def __get_datacite_metadata(bildid="act-bag"):
     """
     Retrieves metadata for a dataset from the DataCite API.
 
@@ -128,7 +138,7 @@ def __get_datacite_metadata(dataset_id="act-bag"):
     for a dataset using its DOI prefix and dataset ID.
 
     Args:
-        dataset_id (str, optional): The unique identifier for the dataset.
+        bildid (str, optional): The unique identifier for the dataset.
             Defaults to "act-bag".
 
     Returns:
@@ -139,23 +149,18 @@ def __get_datacite_metadata(dataset_id="act-bag"):
         requests.exceptions.RequestException: If there is a network issue during the API request.
 
     Example:
-        >>> metadata = __get_datacite_metadata(dataset_id="my-dataset")
-        >>> print(metadata)
-        {'data': {'type': 'dois', 'attributes': {...}}}
+        >>> from brainimagelibrary import dois
+        >>> metadata = dois.__get_datacite_metadata(bildid="act-bag")
+        >>> print(type(metadata))
+        <class 'dict'>
+        >>> print("data" in metadata)
+        True
     """
-    brain = "10.35077"
-    url = f"https://api.datacite.org/dois/{brain}/{dataset_id}"
+    url = f"https://api.datacite.org/dois/{DOI_PREFIX}/{bildid}"
 
-    # Send GET request to the API
     response = requests.get(url)
 
-    # Check if the request was successful (status code 200)
     if response.status_code == 200:
-        # Parse the JSON response
-        metadata = response.json()
+        return response.json()
 
-        # Display the metadata
-        return metadata
-    else:
-        # Print an error message if the request was not successful
-        return None
+    return None

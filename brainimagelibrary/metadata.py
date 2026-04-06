@@ -26,8 +26,12 @@ def by_affiliation(affiliation, params=None, headers=None):
             API request.
 
     Example:
-        >>> results = by_affiliation("Carnegie Mellon University")
-        >>> print(results)
+        >>> from brainimagelibrary import metadata
+        >>> results = metadata.by_affiliation("Carnegie Mellon University")
+        >>> print(type(results))
+        <class 'dict'>
+        >>> print(len(results) > 0)
+        True
     """
     api_url = f"https://api.brainimagelibrary.org/query/contributors?affiliation={affiliation}"
 
@@ -48,7 +52,7 @@ def by_affiliation(affiliation, params=None, headers=None):
         return None
 
 
-def retrieve(dataset_id, params=None, headers=None):
+def retrieve(bildid, params=None, headers=None):
     """
     Retrieves metadata for a dataset by its Brain Image Library ID.
 
@@ -56,7 +60,7 @@ def retrieve(dataset_id, params=None, headers=None):
     for the specified dataset.
 
     Args:
-        dataset_id (str): The unique Brain Image Library identifier for the
+        bildid (str): The unique Brain Image Library identifier for the
             dataset (e.g. ``"act-bag"``).
         params (dict, optional): Additional query parameters to include in the
             API request. Defaults to None.
@@ -73,10 +77,14 @@ def retrieve(dataset_id, params=None, headers=None):
             API request.
 
     Example:
-        >>> metadata = retrieve("act-bag")
-        >>> print(metadata)
+        >>> from brainimagelibrary import metadata
+        >>> data = metadata.retrieve("act-bag")
+        >>> print(type(data))
+        <class 'dict'>
+        >>> print("retjson" in data)
+        True
     """
-    api_url = f"https://api.brainimagelibrary.org/retrieve?bildid={dataset_id}"
+    api_url = f"https://api.brainimagelibrary.org/retrieve?bildid={bildid}"
 
     try:
         response = requests.get(api_url, params=params, headers=headers)
@@ -119,8 +127,12 @@ def query(query_string, params=None, headers=None):
             API request.
 
     Example:
-        >>> results = query("mouse cortex")
-        >>> print(results)
+        >>> from brainimagelibrary import metadata
+        >>> results = metadata.query("mouse cortex")
+        >>> print(type(results))
+        <class 'dict'>
+        >>> print(len(results) > 0)
+        True
     """
     api_url = f"https://api.brainimagelibrary.org/query/fulltext?text={query_string}"
 
