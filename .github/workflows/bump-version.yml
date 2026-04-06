@@ -18,8 +18,9 @@ jobs:
           python-version: '3.x'
 
       - name: Run version bump script
+        id: bump
         run: |
-          python - <<'EOF'
+          NEW_VERSION=$(python - <<'EOF'
           import re
           from pathlib import Path
 
@@ -31,8 +32,10 @@ jobs:
           new_version = f"{major}.{minor}.{patch + 1}"
           updated = re.sub(r'version="\d+\.\d+\.\d+"', f'version="{new_version}"', content)
           Path("setup.py").write_text(updated)
-          print(f"Bumped version to {new_version}")
+          print(new_version)
           EOF
+          )
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Commit updated version
         run: |
@@ -41,3 +44,11 @@ jobs:
           git add setup.py
           git commit -m "Bump version in setup.py [skip ci]" || echo "No changes to commit"
           git push
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.bump.outputs.new_version }}" \
+            --title "v${{ steps.bump.outputs.new_version }}" \
+            --generate-notes
