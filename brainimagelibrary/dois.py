@@ -1,40 +1,248 @@
 import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from .retrieve import by_url as _retrieve_by_url
+
+MAX_WORKERS = 8
 
 DOI_PREFIX = "10.35077"
 
 
-def get_number_of_citations(bildid="act-bag"):
-    """
-    Retrieves the number of citations for a specific dataset.
+class Dataset:
+    """DOI operations for individual BIL datasets."""
 
-    This function gathers citation data for a given dataset by querying multiple
-    sources, such as DataCite and OpenCitations.
+    def get(self, bildid="act-bag"):
+        """
+        Retrieves metadata for a specific dataset from the DataCite API.
 
-    Args:
-        bildid (str, optional): The unique identifier for the dataset.
-            Defaults to "act-bag".
+        Args:
+            bildid (str, optional): The unique identifier for the dataset.
+                Defaults to "act-bag".
 
-    Returns:
-        dict: A dictionary containing citation counts from different sources:
-            - `datacite` (int): Citation count from DataCite, or None if unavailable.
-            - `opencitations` (int): Citation count from OpenCitations, or None if unavailable.
-        None: If both sources fail to return citation data.
+        Returns:
+            dict: A dictionary containing the metadata for the dataset, as retrieved
+                  from the DataCite API.
+            None: If the API request fails or the dataset is not found.
 
-    Example:
-        >>> from brainimagelibrary import dois
-        >>> citations = dois.get_number_of_citations(bildid="act-bag")
-        >>> print(type(citations))
-        <class 'dict'>
-        >>> print(list(citations.keys()))
-        ['datacite', 'opencitations']
-    """
-    datacite = __get_number_of_citations_from_datacite(bildid=bildid)
-    opencitations = __get_number_of_citations_from_opencitations(bildid=bildid)
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> metadata = dois.dataset.get(bildid="act-bag")
+            >>> print(type(metadata))
+            <class 'dict'>
+            >>> print("data" in metadata)
+            True
+        """
+        return _get_datacite_metadata(bildid=bildid)
 
-    if datacite is None and opencitations is None:
-        return None
+    def get_citations(self, bildid="act-bag"):
+        """
+        Retrieves citation metadata for a specific dataset from multiple sources.
 
-    return {"datacite": datacite, "opencitations": opencitations}
+        Args:
+            bildid (str, optional): The unique identifier for the dataset.
+                Defaults to "act-bag".
+
+        Returns:
+            dict: A dictionary with citation metadata from each source:
+                - `datacite` (list): Citation records from DataCite, or None if unavailable.
+                - `opencitations` (list): Citation records from OpenCitations, or None if unavailable.
+                - `crossref` (list): Citation records from Crossref, or None if unavailable.
+                - `semanticscholar` (list): Citation records from Semantic Scholar, or None if unavailable.
+                Returns None for all keys if the DOI does not exist.
+
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> result = dois.dataset.get_citations(bildid="act-bag")
+            >>> print(type(result))
+            <class 'dict'>
+            >>> print(list(result.keys()))
+            ['datacite', 'opencitations', 'crossref', 'semanticscholar']
+        """
+        if not _doi_exists(bildid=bildid):
+            return {
+                "datacite": None,
+                "opencitations": None,
+                "crossref": None,
+                "semanticscholar": None,
+            }
+
+        sources = {
+            "datacite": _get_citations_from_datacite,
+            "opencitations": _get_citations_from_opencitations,
+            "crossref": _get_citations_from_crossref,
+            "semanticscholar": _get_citations_from_semanticscholar,
+        }
+        results = {}
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(fn, bildid=bildid): key for key, fn in sources.items()}
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+        return results
+
+    def get_number_of_citations(self, bildid="act-bag"):
+        """
+        Retrieves the number of citations for a specific dataset.
+
+        Args:
+            bildid (str, optional): The unique identifier for the dataset.
+                Defaults to "act-bag".
+
+        Returns:
+            dict: A dictionary containing citation counts from different sources:
+                - `datacite` (int): Citation count from DataCite, or None if unavailable.
+                - `opencitations` (int): Citation count from OpenCitations, or None if unavailable.
+                - `crossref` (int): Citation count from Crossref, or None if unavailable.
+                - `semanticscholar` (int): Citation count from Semantic Scholar, or None if unavailable.
+                Returns None for all keys if the DOI does not exist.
+
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> citations = dois.dataset.get_number_of_citations(bildid="act-bag")
+            >>> print(type(citations))
+            <class 'dict'>
+            >>> print(list(citations.keys()))
+            ['datacite', 'opencitations', 'crossref', 'semanticscholar']
+        """
+        if not _doi_exists(bildid=bildid):
+            return {
+                "datacite": None,
+                "opencitations": None,
+                "crossref": None,
+                "semanticscholar": None,
+            }
+
+        sources = {
+            "datacite": _get_number_of_citations_from_datacite,
+            "opencitations": _get_number_of_citations_from_opencitations,
+            "crossref": _get_number_of_citations_from_crossref,
+            "semanticscholar": _get_number_of_citations_from_semanticscholar,
+        }
+        results = {}
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {executor.submit(fn, bildid=bildid): key for key, fn in sources.items()}
+            for future in as_completed(futures):
+                results[futures[future]] = future.result()
+        return results
+
+    def exists(self, bildid="act-bag"):
+        """
+        Checks whether a dataset has a DOI registered in DataCite.
+
+        Args:
+            bildid (str, optional): The unique identifier for the dataset.
+                Defaults to "act-bag".
+
+        Returns:
+            bool: True if the DOI exists in DataCite, False otherwise.
+
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> dois.dataset.exists(bildid="act-bag")
+            True
+            >>> dois.dataset.exists(bildid="nonexistent-id")
+            False
+        """
+        return _doi_exists(bildid=bildid)
+
+
+class Collection:
+    """DOI operations for BIL collections."""
+
+    def get(self, bildid="act-bag"):
+        """
+        Retrieves metadata for a specific collection from the DataCite API.
+
+        Args:
+            bildid (str, optional): The unique identifier for the collection.
+                Defaults to "act-bag".
+
+        Returns:
+            dict: A dictionary containing the metadata for the collection, as retrieved
+                  from the DataCite API.
+            None: If the API request fails or the collection is not found.
+
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> metadata = dois.collection.get(bildid="act-bag")
+            >>> print(type(metadata))
+            <class 'dict'>
+            >>> print("data" in metadata)
+            True
+        """
+        if not _doi_exists(bildid=bildid):
+            return None
+        return _get_datacite_metadata(bildid=bildid)
+
+    def get_datasets(self, bildid="act-bag"):
+        """
+        Returns all download URLs for datasets in a collection.
+
+        Calls collection.get to retrieve DataCite metadata, then walks all
+        string values in the response and returns those that are URLs hosted
+        on download.brainimagelibrary.org.
+
+        Args:
+            bildid (str, optional): The unique identifier for the collection.
+                Defaults to "act-bag".
+
+        Returns:
+            list: A list of dicts with shape ``{"bildid": ..., "url": ...}``
+                  for each URL found on download.brainimagelibrary.org.
+                  Returns an empty list if no such URLs are found or if
+                  metadata cannot be retrieved.
+
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> urls = dois.collection.get_datasets(bildid="act-bag")
+            >>> print(type(urls))
+            <class 'list'>
+        """
+        metadata = _get_datacite_metadata(bildid=bildid)
+        if not metadata:
+            return []
+
+        urls = set()
+        related = metadata.get("data", {}).get("attributes", {}).get("relatedIdentifiers", [])
+        for item in related:
+            identifier = item.get("relatedIdentifier", "")
+            if "download.brainimagelibrary.org" in identifier:
+                urls.add(identifier)
+
+        results = []
+        for url in urls:
+            data = _retrieve_by_url(url)
+            if data and "bildids" in data:
+                for bildid in data["bildids"]:
+                    results.append({"bildid": bildid, "url": url})
+            elif data and "retjson" in data:
+                bildid = data["retjson"][0].get("bildid")
+                results.append({"bildid": bildid, "url": url})
+            else:
+                results.append({"bildid": None, "url": url})
+        return results
+
+    def exists(self, bildid="act-bag"):
+        """
+        Checks whether a collection has a DOI registered in DataCite.
+
+        Args:
+            bildid (str, optional): The unique identifier for the collection.
+                Defaults to "act-bag".
+
+        Returns:
+            bool: True if the DOI exists in DataCite, False otherwise.
+
+        Example:
+            >>> from brainimagelibrary import dois
+            >>> dois.collection.exists(bildid="act-bag")
+            True
+            >>> dois.collection.exists(bildid="nonexistent-id")
+            False
+        """
+        return _doi_exists(bildid=bildid)
+
+
+dataset = Dataset()
+collection = Collection()
 
 
 def get_metadata(bildid="act-bag"):
@@ -58,31 +266,96 @@ def get_metadata(bildid="act-bag"):
         >>> print("data" in metadata)
         True
     """
-    return __get_datacite_metadata(bildid=bildid)
+    return _get_datacite_metadata(bildid=bildid)
 
 
-def __get_number_of_citations_from_opencitations(bildid="act-bag"):
+def get_citations(bildid="act-bag"):
     """
-    Retrieves the number of citations for a dataset from OpenCitations.
-
-    Queries the OpenCitations COCI REST API using the dataset's DOI.
+    Retrieves citation metadata for a specific dataset from multiple sources.
 
     Args:
         bildid (str, optional): The unique identifier for the dataset.
             Defaults to "act-bag".
 
     Returns:
-        int: The number of citations if the dataset is found on OpenCitations.
-        None: If no citation data is found or if an error occurs.
+        dict: A dictionary with citation metadata from each source:
+            - `datacite` (list): Citation records from DataCite, or None if unavailable.
+            - `opencitations` (list): Citation records from OpenCitations, or None if unavailable.
+            - `crossref` (list): Citation records from Crossref, or None if unavailable.
+            - `semanticscholar` (list): Citation records from Semantic Scholar, or None if unavailable.
+            Returns None for all keys if the DOI does not exist.
 
     Example:
         >>> from brainimagelibrary import dois
-        >>> citations = dois.__get_number_of_citations_from_opencitations(bildid="act-bag")
-        >>> print(type(citations))
-        <class 'int'>
-        >>> print(citations >= 0)
-        True
+        >>> result = dois.get_citations(bildid="act-bag")
+        >>> print(type(result))
+        <class 'dict'>
+        >>> print(list(result.keys()))
+        ['datacite', 'opencitations', 'crossref', 'semanticscholar']
     """
+    return dataset.get_citations(bildid=bildid)
+
+
+def get_number_of_citations(bildid="act-bag"):
+    """
+    Retrieves the number of citations for a specific dataset.
+
+    Args:
+        bildid (str, optional): The unique identifier for the dataset.
+            Defaults to "act-bag".
+
+    Returns:
+        dict: A dictionary containing citation counts from different sources:
+            - `datacite` (int): Citation count from DataCite, or None if unavailable.
+            - `opencitations` (int): Citation count from OpenCitations, or None if unavailable.
+            - `crossref` (int): Citation count from Crossref, or None if unavailable.
+            - `semanticscholar` (int): Citation count from Semantic Scholar, or None if unavailable.
+            Returns None for all keys if the DOI does not exist.
+
+    Example:
+        >>> from brainimagelibrary import dois
+        >>> citations = dois.get_number_of_citations(bildid="act-bag")
+        >>> print(type(citations))
+        <class 'dict'>
+        >>> print(list(citations.keys()))
+        ['datacite', 'opencitations', 'crossref', 'semanticscholar']
+    """
+    return dataset.get_number_of_citations(bildid=bildid)
+
+
+def _doi_exists(bildid="act-bag"):
+    """Returns True if the DOI exists in DataCite, False otherwise."""
+    url = f"https://api.datacite.org/dois/{DOI_PREFIX}/{bildid}"
+    try:
+        response = requests.get(url, timeout=30)
+        return response.status_code == 200
+    except requests.exceptions.RequestException:
+        return False
+
+
+def _get_datacite_metadata(bildid="act-bag"):
+    """
+    Retrieves metadata for a dataset from the DataCite API.
+
+    Args:
+        bildid (str, optional): The unique identifier for the dataset.
+            Defaults to "act-bag".
+
+    Returns:
+        dict: A dictionary containing the dataset's metadata if the request is successful.
+        None: If the request fails or the API returns an error.
+    """
+    url = f"https://api.datacite.org/dois/{DOI_PREFIX}/{bildid}"
+
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        return response.json()
+
+    return None
+
+
+def _get_number_of_citations_from_opencitations(bildid="act-bag"):
     doi = f"{DOI_PREFIX}/{bildid}"
     url = f"https://opencitations.net/index/coci/api/v1/citation-count/{doi}"
 
@@ -91,35 +364,14 @@ def __get_number_of_citations_from_opencitations(bildid="act-bag"):
         if response.status_code != 200:
             return None
         data = response.json()
-        return int(data[0]["count"])
+        count = int(data[0]["count"])
+        return count
     except (IndexError, KeyError, ValueError, requests.exceptions.RequestException):
         return None
 
 
-def __get_number_of_citations_from_datacite(bildid="act-bag"):
-    """
-    Retrieves the number of citations for a dataset from DataCite.
-
-    This function fetches metadata for a given dataset from the DataCite API and
-    extracts the citation count.
-
-    Args:
-        bildid (str, optional): The unique identifier for the dataset.
-            Defaults to "act-bag".
-
-    Returns:
-        int: The number of citations for the dataset if available.
-        None: If no citation data is found or if an error occurs.
-
-    Example:
-        >>> from brainimagelibrary import dois
-        >>> citations = dois.__get_number_of_citations_from_datacite(bildid="act-bag")
-        >>> print(type(citations))
-        <class 'int'>
-        >>> print(citations >= 0)
-        True
-    """
-    metadata = __get_datacite_metadata(bildid=bildid)
+def _get_number_of_citations_from_datacite(bildid="act-bag"):
+    metadata = _get_datacite_metadata(bildid=bildid)
 
     if metadata is None:
         return None
@@ -130,37 +382,86 @@ def __get_number_of_citations_from_datacite(bildid="act-bag"):
         return None
 
 
-def __get_datacite_metadata(bildid="act-bag"):
-    """
-    Retrieves metadata for a dataset from the DataCite API.
+def _get_number_of_citations_from_crossref(bildid="act-bag"):
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://api.crossref.org/works/{doi}"
 
-    This function sends a GET request to the DataCite API to fetch metadata
-    for a dataset using its DOI prefix and dataset ID.
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        count = data["message"]["is-referenced-by-count"]
+        return count
+    except (KeyError, TypeError, ValueError, requests.exceptions.RequestException):
+        return None
 
-    Args:
-        bildid (str, optional): The unique identifier for the dataset.
-            Defaults to "act-bag".
 
-    Returns:
-        dict: A dictionary containing the dataset's metadata if the request is successful.
-        None: If the request fails or the API returns an error.
+def _get_number_of_citations_from_semanticscholar(bildid="act-bag"):
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}?fields=citationCount"
 
-    Raises:
-        requests.exceptions.RequestException: If there is a network issue during the API request.
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        count = data["citationCount"]
+        return count
+    except (KeyError, TypeError, ValueError, requests.exceptions.RequestException):
+        return None
 
-    Example:
-        >>> from brainimagelibrary import dois
-        >>> metadata = dois.__get_datacite_metadata(bildid="act-bag")
-        >>> print(type(metadata))
-        <class 'dict'>
-        >>> print("data" in metadata)
-        True
-    """
-    url = f"https://api.datacite.org/dois/{DOI_PREFIX}/{bildid}"
 
-    response = requests.get(url)
+def _get_citations_from_datacite(bildid="act-bag"):
+    """Returns list of citing works from DataCite, or None on failure."""
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://api.datacite.org/dois/{doi}/citations"
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        return data.get("data", None)
+    except requests.exceptions.RequestException:
+        return None
 
-    if response.status_code == 200:
+
+def _get_citations_from_opencitations(bildid="act-bag"):
+    """Returns list of citing works from OpenCitations, or None on failure."""
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://opencitations.net/index/coci/api/v1/citations/{doi}"
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
         return response.json()
+    except requests.exceptions.RequestException:
+        return None
 
-    return None
+
+def _get_citations_from_crossref(bildid="act-bag"):
+    """Returns list of citing works from Crossref, or None on failure."""
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://api.crossref.org/works?filter=cites:{doi}"
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        return data.get("message", {}).get("items", None)
+    except (KeyError, TypeError, requests.exceptions.RequestException):
+        return None
+
+
+def _get_citations_from_semanticscholar(bildid="act-bag"):
+    """Returns list of citing works from Semantic Scholar, or None on failure."""
+    doi = f"{DOI_PREFIX}/{bildid}"
+    url = f"https://api.semanticscholar.org/graph/v1/paper/DOI:{doi}/citations?fields=title,authors,year,externalIds"
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        data = response.json()
+        return data.get("data", None)
+    except (KeyError, TypeError, requests.exceptions.RequestException):
+        return None

@@ -1,4 +1,3 @@
-from .retrieve import *
 import requests
 import pandas as pd
 import gzip

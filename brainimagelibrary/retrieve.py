@@ -103,6 +103,13 @@ def by_directory(directory=None, params=None, headers=None):
         return None
 
 
+def by_url(url=None):
+    if not url:
+        return {}
+    directory = url.replace("https://download.brainimagelibrary.org", "/bil/data")
+    return by_directory(directory=directory)
+
+
 def by_version(version="2.0"):
     """
     Retrieves dataset IDs based on metadata version.
