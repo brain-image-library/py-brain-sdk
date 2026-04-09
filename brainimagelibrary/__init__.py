@@ -7,6 +7,7 @@ __author__ = "Ivan Cao-Berg"
 __credits__ = "Brain Image Library Team"
 
 from .retrieve import by_id, by_directory, by_url, by_version, get_all_bildids
+from . import metadata
 from .metadata import *
 from .reports import *
 from .inventory import *

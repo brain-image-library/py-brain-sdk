@@ -44,9 +44,13 @@ class Dataset:
         Returns:
             dict: A dictionary with citation metadata from each source:
                 - `datacite` (list): Citation records from DataCite, or None if unavailable.
+                  Each record includes a `title` key extracted from `attributes.titles`.
                 - `opencitations` (list): Citation records from OpenCitations, or None if unavailable.
+                  Each record includes a `title` key fetched via the Crossref API.
                 - `crossref` (list): Citation records from Crossref, or None if unavailable.
+                  Each record includes a `title` key normalized from the `title` array.
                 - `semanticscholar` (list): Citation records from Semantic Scholar, or None if unavailable.
+                  Each record includes a `title` key extracted from `citingPaper`.
                 Returns None for all keys if the DOI does not exist.
 
         Example:
@@ -280,9 +284,13 @@ def get_citations(bildid="act-bag"):
     Returns:
         dict: A dictionary with citation metadata from each source:
             - `datacite` (list): Citation records from DataCite, or None if unavailable.
+              Each record includes a `title` key extracted from `attributes.titles`.
             - `opencitations` (list): Citation records from OpenCitations, or None if unavailable.
+              Each record includes a `title` key fetched via the Crossref API.
             - `crossref` (list): Citation records from Crossref, or None if unavailable.
+              Each record includes a `title` key normalized from the `title` array.
             - `semanticscholar` (list): Citation records from Semantic Scholar, or None if unavailable.
+              Each record includes a `title` key extracted from `citingPaper`.
             Returns None for all keys if the DOI does not exist.
 
     Example:
@@ -412,6 +420,19 @@ def _get_number_of_citations_from_semanticscholar(bildid="act-bag"):
         return None
 
 
+def _get_title_for_doi(doi):
+    """Fetches the title for a given DOI via the Crossref API. Returns None on failure."""
+    url = f"https://api.crossref.org/works/{doi}"
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code != 200:
+            return None
+        titles = response.json().get("message", {}).get("title", [])
+        return titles[0] if titles else None
+    except (IndexError, KeyError, TypeError, requests.exceptions.RequestException):
+        return None
+
+
 def _get_citations_from_datacite(bildid="act-bag"):
     """Returns list of citing works from DataCite, or None on failure."""
     doi = f"{DOI_PREFIX}/{bildid}"
@@ -420,8 +441,13 @@ def _get_citations_from_datacite(bildid="act-bag"):
         response = requests.get(url, timeout=30)
         if response.status_code != 200:
             return None
-        data = response.json()
-        return data.get("data", None)
+        records = response.json().get("data", None)
+        if records is None:
+            return None
+        for record in records:
+            titles = record.get("attributes", {}).get("titles", [])
+            record["title"] = titles[0]["title"] if titles else None
+        return records
     except requests.exceptions.RequestException:
         return None
 
@@ -434,7 +460,17 @@ def _get_citations_from_opencitations(bildid="act-bag"):
         response = requests.get(url, timeout=30)
         if response.status_code != 200:
             return None
-        return response.json()
+        records = response.json()
+        if not records:
+            return records
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = {
+                executor.submit(_get_title_for_doi, record.get("citing", "")): i
+                for i, record in enumerate(records)
+            }
+            for future in as_completed(futures):
+                records[futures[future]]["title"] = future.result()
+        return records
     except requests.exceptions.RequestException:
         return None
 
@@ -447,8 +483,13 @@ def _get_citations_from_crossref(bildid="act-bag"):
         response = requests.get(url, timeout=30)
         if response.status_code != 200:
             return None
-        data = response.json()
-        return data.get("message", {}).get("items", None)
+        items = response.json().get("message", {}).get("items", None)
+        if items is None:
+            return None
+        for item in items:
+            titles = item.get("title", [])
+            item["title"] = titles[0] if titles else None
+        return items
     except (KeyError, TypeError, requests.exceptions.RequestException):
         return None
 
@@ -461,7 +502,11 @@ def _get_citations_from_semanticscholar(bildid="act-bag"):
         response = requests.get(url, timeout=30)
         if response.status_code != 200:
             return None
-        data = response.json()
-        return data.get("data", None)
+        records = response.json().get("data", None)
+        if records is None:
+            return None
+        for record in records:
+            record["title"] = record.get("citingPaper", {}).get("title")
+        return records
     except (KeyError, TypeError, requests.exceptions.RequestException):
         return None
