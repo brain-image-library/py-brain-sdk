@@ -27,19 +27,19 @@ pip install brainimagelibrary
 ### Retrieve dataset metadata
 
 ```python
-import brainimagelibrary as bil
+from brainimagelibrary import retrieve, query
 
 # By BIL dataset ID
-metadata = bil.retrieve.by_id(bildid="act-bag")
+metadata = retrieve.by_id(bildid="act-bag")
 
 # By directory path
-metadata = bil.retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
+metadata = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
 
 # Full-text search
-results = bil.metadata.query("mouse cortex")
+results = query.by_text("mouse cortex")
 
 # By contributor affiliation
-results = bil.metadata.by_affiliation("Carnegie Mellon University")
+results = retrieve.by_affiliation("Carnegie Mellon University")
 ```
 
 ### List all dataset IDs
