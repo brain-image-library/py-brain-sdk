@@ -23,7 +23,7 @@ def by_id(bildid=None, params=None, headers=None):
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> from brainimagelibrary import retrieve
+        >>> from brainimagelibrary.metadata import retrieve
         >>> metadata = retrieve.by_id(bildid="act-bag")
         >>> print(type(metadata))
         <class 'dict'>
@@ -73,7 +73,7 @@ def by_directory(directory=None, params=None, headers=None):
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> from brainimagelibrary import retrieve
+        >>> from brainimagelibrary.metadata import retrieve
         >>> metadata = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
         >>> print(type(metadata))
         <class 'dict'>
@@ -110,6 +110,57 @@ def by_url(url=None):
     return by_directory(directory=directory)
 
 
+def by_affiliation(affiliation, params=None, headers=None):
+    """
+    Retrieves datasets associated with a contributor's affiliation.
+
+    Queries the Brain Image Library API for datasets whose contributors
+    belong to the specified affiliation.
+
+    Args:
+        affiliation (str): The affiliation name to search for (e.g. a university
+            or research institute).
+        params (dict, optional): Additional query parameters to include in the
+            API request. Defaults to None.
+        headers (dict, optional): HTTP headers to include in the API request.
+            Defaults to None.
+
+    Returns:
+        dict: The API response containing matching contributor/dataset records.
+        dict: An empty dictionary if no records are found for the affiliation.
+        None: If the request fails or encounters an exception.
+
+    Raises:
+        requests.exceptions.RequestException: If an error occurs during the
+            API request.
+
+    Example:
+        >>> from brainimagelibrary.metadata import retrieve
+        >>> results = retrieve.by_affiliation("Carnegie Mellon University")
+        >>> print(type(results))
+        <class 'dict'>
+        >>> print(len(results) > 0)
+        True
+    """
+    api_url = f"https://api.brainimagelibrary.org/query/contributors?affiliation={affiliation}"
+
+    try:
+        response = requests.get(api_url, params=params, headers=headers)
+
+        response = response.json()
+        if (
+            "message" in response.keys()
+            and response["message"] == "GET failure, no entry found"
+        ):
+            return {}
+        else:
+            return response
+
+    except requests.exceptions.RequestException as e:
+        print(f"Error making API request: {e}")
+        return None
+
+
 def by_version(version="2.0"):
     """
     Retrieves dataset IDs based on metadata version.
@@ -129,7 +180,7 @@ def by_version(version="2.0"):
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> from brainimagelibrary import retrieve
+        >>> from brainimagelibrary.metadata import retrieve
         >>> ids = retrieve.by_version(version="1.0")
         >>> print(type(ids))
         <class 'list'>
@@ -152,28 +203,3 @@ def by_version(version="2.0"):
     except requests.exceptions.RequestException as e:
         print(f"Error making API request: {e}")
         return None
-
-
-def get_all_bildids():
-    """
-    Retrieves all dataset IDs from the Brain Image Library.
-
-    Fetches dataset IDs for both metadata version 1.0 and 2.0, then returns
-    the v2.0 list. The v1.0 list is fetched but currently unused.
-
-    Returns:
-        list: A list of dataset IDs (``bildids``) from metadata version 2.0.
-        None: If the underlying API request fails.
-
-    Example:
-        >>> from brainimagelibrary import retrieve
-        >>> ids = retrieve.get_all_bildids()
-        >>> print(type(ids))
-        <class 'list'>
-        >>> print(len(ids) > 0)
-        True
-    """
-    v2 = by_version(version="2.0")
-    v1 = by_version(version="1.0")
-
-    return v2

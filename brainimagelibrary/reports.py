@@ -21,7 +21,7 @@ __create_daily_report(overwrite)
 """
 
 import requests
-from .retrieve import by_id, by_version
+from .metadata.retrieve import by_id, by_version
 from .inventory import get as inventory_get
 from tqdm import tqdm
 from pathlib import Path
@@ -231,7 +231,7 @@ def __create_daily_report(overwrite=False):
             print(f"Daily report {local_path} found on disk.")
             return pd.read_csv(local_path, sep="\t")
 
-    all_datasets = get_bildids()
+    all_datasets = get_all_bildids()
 
     print(f"Processing {len(all_datasets)} unique datasets in parallel")
     data = []
@@ -262,7 +262,7 @@ def __create_daily_report(overwrite=False):
     return df
 
 
-def get_bildids():
+def get_all_bildids():
     """
     Retrieve all dataset IDs from the Brain Image Library across metadata versions.
 
@@ -274,7 +274,7 @@ def get_bildids():
 
     Example:
         >>> from brainimagelibrary import reports
-        >>> ids = reports.get_bildids()
+        >>> ids = reports.get_all_bildids()
         >>> print(type(ids))
         <class 'list'>
         >>> print(ids[:3])

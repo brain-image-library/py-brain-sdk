@@ -1,6 +1,6 @@
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .retrieve import by_url as _retrieve_by_url
+from .metadata.retrieve import by_url as _retrieve_by_url
 
 MAX_WORKERS = 8
 
@@ -33,7 +33,7 @@ class Dataset:
         """
         return _get_datacite_metadata(bildid=bildid)
 
-    def get_citations(self, bildid="act-bag"):
+    def get_datacite_citations(self, bildid="act-bag"):
         """
         Retrieves citation metadata for a specific dataset from multiple sources.
 
@@ -55,7 +55,7 @@ class Dataset:
 
         Example:
             >>> from brainimagelibrary import dois
-            >>> result = dois.dataset.get_citations(bildid="act-bag")
+            >>> result = dois.dataset.get_datacite_citations(bildid="act-bag")
             >>> print(type(result))
             <class 'dict'>
             >>> print(list(result.keys()))
@@ -249,7 +249,7 @@ dataset = Dataset()
 collection = Collection()
 
 
-def get_metadata(bildid="act-bag"):
+def get_datacite_metadata(bildid="act-bag"):
     """
     Retrieves metadata for a specific dataset from the DataCite API.
 
@@ -264,7 +264,7 @@ def get_metadata(bildid="act-bag"):
 
     Example:
         >>> from brainimagelibrary import dois
-        >>> metadata = dois.get_metadata(bildid="act-bag")
+        >>> metadata = dois.get_datacite_metadata(bildid="act-bag")
         >>> print(type(metadata))
         <class 'dict'>
         >>> print("data" in metadata)
@@ -273,7 +273,7 @@ def get_metadata(bildid="act-bag"):
     return _get_datacite_metadata(bildid=bildid)
 
 
-def get_citations(bildid="act-bag"):
+def get_datacite_citations(bildid="act-bag"):
     """
     Retrieves citation metadata for a specific dataset from multiple sources.
 
@@ -295,13 +295,13 @@ def get_citations(bildid="act-bag"):
 
     Example:
         >>> from brainimagelibrary import dois
-        >>> result = dois.get_citations(bildid="act-bag")
+        >>> result = dois.get_datacite_citations(bildid="act-bag")
         >>> print(type(result))
         <class 'dict'>
         >>> print(list(result.keys()))
         ['datacite', 'opencitations', 'crossref', 'semanticscholar']
     """
-    return dataset.get_citations(bildid=bildid)
+    return dataset.get_datacite_citations(bildid=bildid)
 
 
 def get_number_of_citations(bildid="act-bag"):
