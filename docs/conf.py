@@ -6,7 +6,7 @@ sys.path.insert(0, os.path.abspath(".."))
 project = "brainimagelibrary"
 author = "Ivan Cao-Berg"
 copyright = "2026, Ivan Cao-Berg"
-release = "0.0.17"
+release = "0.0.18"
 
 extensions = [
     "sphinx.ext.autodoc",
