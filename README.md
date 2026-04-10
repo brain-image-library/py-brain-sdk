@@ -11,11 +11,75 @@ py-brain-sdk is a Python library that simplifies interaction with the Brain Imag
 With py-brain-sdk, you can
 
 * Search and retrieve brain imaging datasets and metadata.
+* Query datasets by ID, directory path, contributor affiliation, or free-text search.
+* Look up DOI metadata and citation counts from DataCite, OpenCitations, Crossref, and Semantic Scholar.
+* Browse BIL collections and enumerate their constituent datasets.
 * Download specific image files or subsets of large datasets.
-* Interface with BIL’s visualization and computational tools.
 
-This SDK is designed to streamline workflows for neuroscience research, making it easier to integrate BIL’s vast resources into your 
-Python projects.
+## Installation
+
+```bash
+pip install brainimagelibrary
+```
+
+## Quick Start
+
+### Retrieve dataset metadata
+
+```python
+import brainimagelibrary as bil
+
+# By BIL dataset ID
+metadata = bil.retrieve.by_id(bildid="act-bag")
+
+# By directory path
+metadata = bil.retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
+
+# Full-text search
+results = bil.metadata.query("mouse cortex")
+
+# By contributor affiliation
+results = bil.metadata.by_affiliation("Carnegie Mellon University")
+```
+
+### List all dataset IDs
+
+```python
+import brainimagelibrary as bil
+
+bildids = bil.get_all_bildids()
+print(f"Total datasets: {len(bildids)}")
+```
+
+### DOI and citation lookup
+
+```python
+from brainimagelibrary import dois
+
+# Check if a dataset has a registered DOI
+dois.dataset.exists(bildid="act-bag")
+
+# Get DataCite metadata
+metadata = dois.dataset.get(bildid="act-bag")
+
+# Get citation counts from multiple sources
+citations = dois.dataset.get_number_of_citations(bildid="act-bag")
+# {‘datacite’: 2, ‘opencitations’: 1, ‘crossref’: 0, ‘semanticscholar’: 3}
+
+# Get full citation records
+records = dois.dataset.get_datacite_citations(bildid="act-bag")
+```
+
+### Collection operations
+
+```python
+from brainimagelibrary import dois
+
+# List all datasets in a collection
+datasets = dois.collection.get_datasets(bildid="act-bag")
+for entry in datasets:
+    print(entry["bildid"], entry["url"])
+```
 
 ---
 Copyright © 2020-2025 Pittsburgh Supercomputing Center. All Rights Reserved.

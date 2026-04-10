@@ -15,7 +15,7 @@ from pprint import pprint
 dataset_id = "act-bag"
 
 print(f"Fetching DataCite metadata for dataset: {dataset_id}")
-metadata = brainzzz.get_metadata(dataset_id=dataset_id)
+metadata = brainzzz.get_datacite_metadata(dataset_id=dataset_id)
 
 if metadata is None:
     print(f"No DataCite metadata found for dataset '{dataset_id}'.")

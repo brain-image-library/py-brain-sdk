@@ -6,7 +6,7 @@ from tqdm import tqdm
 pandarallel.initialize(progress_bar=True)
 tqdm.pandas()
 
-bildids = bil.retrieve.get_all_bildids()
+bildids = bil.get_all_bildids()
 df = pd.DataFrame(bildids, columns=["bildid"])
 
 df["DOIS"] = df["bildid"].parallel_apply(bil.dois.get_number_of_citations)
