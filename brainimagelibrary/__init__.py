@@ -2,7 +2,7 @@
 brainimagelibrary
 """
 
-__version__ = "0.0.20"
+__version__ = "0.0.21"
 __author__ = "Ivan Cao-Berg"
 __credits__ = "Brain Image Library Team"
 
