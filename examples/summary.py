@@ -1,17 +1,18 @@
 """
 summary.py — Print a high-level summary of the BIL daily inventory.
 
-Fetches today's inventory report and prints aggregate statistics:
-    - Total number of datasets
-    - Total number of files
-    - Unique contributor, affiliation, and species counts
-    - Metadata version breakdown
+Demonstrates two summary utilities:
+
+1. summary.daily()  — Fetch today's inventory and print aggregate statistics.
+2. summary.load()   — Load the inventory report for a specific date (YYYYMMDD).
 
 Usage:
     python examples/summary.py
 """
 
 import brainimagelibrary as brainzzz
+
+# --- Example 1: today's summary -------------------------------------------
 
 print("Fetching daily BIL summary...")
 result = brainzzz.summary.daily()
@@ -27,3 +28,14 @@ else:
     print()
     print("=== Metadata Versions ===")
     print(result["metadata_version"].to_string())
+
+# --- Example 2: load inventory for a specific date -------------------------
+
+print()
+date = "20240101"
+print(f"Loading inventory report for {date}...")
+df = brainzzz.summary.load(date)
+
+if df is not None:
+    print(f"Loaded {len(df)} records.")
+    print(df.head())

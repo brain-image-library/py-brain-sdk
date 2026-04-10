@@ -1,6 +1,6 @@
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from .metadata.retrieve import by_url as _retrieve_by_url
+from .retrieve import by_url as _retrieve_by_url
 
 MAX_WORKERS = 8
 
@@ -19,9 +19,9 @@ class Dataset:
                 Defaults to "act-bag".
 
         Returns:
-            dict: A dictionary containing the metadata for the dataset, as retrieved
-                  from the DataCite API.
-            None: If the API request fails or the dataset is not found.
+            dict or None: A dictionary containing the metadata for the dataset, as
+                retrieved from the DataCite API, or None if the API request fails
+                or the dataset is not found.
 
         Example:
             >>> from brainimagelibrary import dois
@@ -51,6 +51,7 @@ class Dataset:
                   Each record includes a `title` key normalized from the `title` array.
                 - `semanticscholar` (list): Citation records from Semantic Scholar, or None if unavailable.
                   Each record includes a `title` key extracted from `citingPaper`.
+
                 Returns None for all keys if the DOI does not exist.
 
         Example:
@@ -60,6 +61,28 @@ class Dataset:
             <class 'dict'>
             >>> print(list(result.keys()))
             ['datacite', 'opencitations', 'crossref', 'semanticscholar']
+            >>> import pprint; pprint.pprint(result)  # doctest: +SKIP
+            {'crossref': None,
+             'datacite': None,
+             'opencitations': [{'author_sc': 'no',
+                                'cited': '10.35077/act-bag',
+                                'citing': '10.1038/s41586-023-06808-9',
+                                'creation': '2023-12-13',
+                                'journal_sc': 'no',
+                                'oci': '06320380336-06480144673',
+                                'timespan': '',
+                                'title': 'Molecularly defined and spatially resolved '
+                                         'cell atlas of the whole mouse brain'},
+                               {'author_sc': 'no',
+                                'cited': '10.35077/act-bag',
+                                'citing': '10.1101/2023.08.13.552987',
+                                'creation': '2023-08-15',
+                                'journal_sc': 'yes',
+                                'oci': '06404413343-06480144673',
+                                'timespan': '',
+                                'title': 'Search and Match across Spatial Omics '
+                                         'Samples at Single-cell Resolution'}],
+             'semanticscholar': None}
         """
         if not _doi_exists(bildid=bildid):
             return {
@@ -96,6 +119,7 @@ class Dataset:
                 - `opencitations` (int): Citation count from OpenCitations, or None if unavailable.
                 - `crossref` (int): Citation count from Crossref, or None if unavailable.
                 - `semanticscholar` (int): Citation count from Semantic Scholar, or None if unavailable.
+
                 Returns None for all keys if the DOI does not exist.
 
         Example:
@@ -160,9 +184,9 @@ class Collection:
                 Defaults to "act-bag".
 
         Returns:
-            dict: A dictionary containing the metadata for the collection, as retrieved
-                  from the DataCite API.
-            None: If the API request fails or the collection is not found.
+            dict or None: A dictionary containing the metadata for the collection, as
+                retrieved from the DataCite API, or None if the API request fails
+                or the collection is not found.
 
         Example:
             >>> from brainimagelibrary import dois
@@ -258,9 +282,9 @@ def get_datacite_metadata(bildid="act-bag"):
             Defaults to "act-bag".
 
     Returns:
-        dict: A dictionary containing the metadata for the dataset, as retrieved
-              from the DataCite API.
-        None: If the API request fails or the dataset is not found.
+        dict or None: A dictionary containing the metadata for the dataset, as retrieved
+            from the DataCite API, or None if the API request fails or the dataset
+            is not found.
 
     Example:
         >>> from brainimagelibrary import dois
@@ -291,6 +315,7 @@ def get_datacite_citations(bildid="act-bag"):
               Each record includes a `title` key normalized from the `title` array.
             - `semanticscholar` (list): Citation records from Semantic Scholar, or None if unavailable.
               Each record includes a `title` key extracted from `citingPaper`.
+
             Returns None for all keys if the DOI does not exist.
 
     Example:
@@ -300,6 +325,28 @@ def get_datacite_citations(bildid="act-bag"):
         <class 'dict'>
         >>> print(list(result.keys()))
         ['datacite', 'opencitations', 'crossref', 'semanticscholar']
+        >>> import pprint; pprint.pprint(result)  # doctest: +SKIP
+        {'crossref': None,
+         'datacite': None,
+         'opencitations': [{'author_sc': 'no',
+                            'cited': '10.35077/act-bag',
+                            'citing': '10.1038/s41586-023-06808-9',
+                            'creation': '2023-12-13',
+                            'journal_sc': 'no',
+                            'oci': '06320380336-06480144673',
+                            'timespan': '',
+                            'title': 'Molecularly defined and spatially resolved '
+                                     'cell atlas of the whole mouse brain'},
+                           {'author_sc': 'no',
+                            'cited': '10.35077/act-bag',
+                            'citing': '10.1101/2023.08.13.552987',
+                            'creation': '2023-08-15',
+                            'journal_sc': 'yes',
+                            'oci': '06404413343-06480144673',
+                            'timespan': '',
+                            'title': 'Search and Match across Spatial Omics '
+                                     'Samples at Single-cell Resolution'}],
+         'semanticscholar': None}
     """
     return dataset.get_datacite_citations(bildid=bildid)
 
@@ -318,6 +365,7 @@ def get_number_of_citations(bildid="act-bag"):
             - `opencitations` (int): Citation count from OpenCitations, or None if unavailable.
             - `crossref` (int): Citation count from Crossref, or None if unavailable.
             - `semanticscholar` (int): Citation count from Semantic Scholar, or None if unavailable.
+
             Returns None for all keys if the DOI does not exist.
 
     Example:

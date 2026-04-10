@@ -21,7 +21,7 @@ __create_daily_report(overwrite)
 """
 
 import requests
-from .metadata.retrieve import by_id, by_version
+from .retrieve import by_id, by_version
 from .inventory import get as inventory_get
 from tqdm import tqdm
 from pathlib import Path

@@ -20,15 +20,15 @@ def summary(bildid=None):
         bildid (str, optional): The unique identifier of the dataset. Defaults to None.
 
     Returns:
-        dict | None: A dictionary containing the following keys, or None if the
+        dict or None: A dictionary containing the following keys, or None if the
             dataset cannot be retrieved:
-            - `pretty_size` (str): Human-readable size of the dataset.
-            - `size` (int): Total size of the dataset in bytes.
-            - `number_of_files` (int): Number of files in the dataset.
-            - `files` (dict): Detailed file information, including:
-                - `frequencies` (dict): Frequency of file extensions.
-                - `types` (list): Types of files in the dataset.
-                - `sizes` (dict): Size of files grouped by extension.
+
+            - ``pretty_size`` (str): Human-readable size of the dataset.
+            - ``size`` (int): Total size of the dataset in bytes.
+            - ``number_of_files`` (int): Number of files in the dataset.
+            - ``files`` (dict): Detailed file information with keys
+              ``frequencies`` (dict of extension counts), ``types`` (list of
+              file types), and ``sizes`` (dict of total size per extension).
 
     Example:
         >>> from brainimagelibrary import inventory

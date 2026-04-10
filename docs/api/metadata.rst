@@ -1,7 +1,7 @@
 metadata
 ========
 
-Higher-level metadata retrieval and full-text search functions.
+Higher-level metadata retrieval functions.
 
 .. automodule:: brainimagelibrary.metadata
    :members:

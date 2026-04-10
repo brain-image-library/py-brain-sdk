@@ -84,7 +84,7 @@ def by_directory(directory=None, params=None, headers=None):
         return {}
 
     api_url = (
-        f"https://api.brainimagelibrary.org/query/dataset?bildirectory={directory}"
+        f"https://api.brainimagelibrary.org/retrieve?bildirectory={directory}"
     )
 
     try:
@@ -104,6 +104,30 @@ def by_directory(directory=None, params=None, headers=None):
 
 
 def by_url(url=None):
+    """
+    Retrieves metadata for a dataset by its download URL.
+
+    Converts a ``download.brainimagelibrary.org`` URL to its corresponding
+    BIL filesystem path and delegates to :func:`by_directory`.
+
+    Args:
+        url (str, optional): The download URL of the dataset
+            (e.g. ``"https://download.brainimagelibrary.org/2019/02/13/H19.28.012.MITU.01.05"``).
+            If not provided, returns an empty dictionary.
+
+    Returns:
+        dict: The metadata for the dataset if the request is successful.
+        dict: An empty dictionary if the URL is not provided or no entry is found.
+        None: If the request fails or encounters an exception.
+
+    Example:
+        >>> from brainimagelibrary.metadata import retrieve
+        >>> metadata = retrieve.by_url("https://download.brainimagelibrary.org/2019/02/13/H19.28.012.MITU.01.05")
+        >>> print(type(metadata))
+        <class 'dict'>
+        >>> print("retjson" in metadata)
+        True
+    """
     if not url:
         return {}
     directory = url.replace("https://download.brainimagelibrary.org", "/bil/data")
@@ -142,7 +166,7 @@ def by_affiliation(affiliation, params=None, headers=None):
         >>> print(len(results) > 0)
         True
     """
-    api_url = f"https://api.brainimagelibrary.org/query/contributors?affiliation={affiliation}"
+    api_url = f"https://api.brainimagelibrary.org/retrieve?affiliation={affiliation}"
 
     try:
         response = requests.get(api_url, params=params, headers=headers)
@@ -187,7 +211,7 @@ def by_version(version="2.0"):
         >>> print(len(ids) > 0)
         True
     """
-    api_url = f"https://api.brainimagelibrary.org/query/submission?metadata={version}"
+    api_url = f"https://api.brainimagelibrary.org/retrieve?metadata={version}"
 
     try:
         response = requests.get(api_url)

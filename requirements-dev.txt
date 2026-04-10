@@ -1,2 +1,7 @@
 black>=22.0.0
 ipython>=8.0.0
+furo
+sphinx
+sphinx-rtd-theme
+sphinx-thebe
+pytest>=7.0.0
