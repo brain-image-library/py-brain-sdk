@@ -9,15 +9,15 @@ Usage:
     python examples/datacite.py
 """
 
-import brainimagelibrary as brainzzz
+import brainimagelibrary as bil
 from pprint import pprint
 
 dataset_id = "act-bag"
 
 print(f"Fetching DataCite metadata for dataset: {dataset_id}")
-metadata = brainzzz.get_datacite_metadata(dataset_id=dataset_id)
+metadata = bil.get_datacite_metadata(bildid=dataset_id)
 
 if metadata is None:
-    print(f"No DataCite metadata found for dataset '{dataset_id}'.")
+    print(f"No DataCite record found for dataset '{dataset_id}'. DOI may not be registered.")
 else:
     pprint(metadata)

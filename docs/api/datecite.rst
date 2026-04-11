@@ -1,9 +1,9 @@
-dois
-====
+datecite
+========
 
-DOI and citation lookup via DataCite and Google Scholar.
+DOI and citation lookup via DataCite, OpenCitations, Crossref, and Semantic Scholar.
 
-.. automodule:: brainimagelibrary.dois
+.. automodule:: brainimagelibrary.datecite
    :members:
    :undoc-members: False
    :show-inheritance:
@@ -26,5 +26,5 @@ and run the code directly in your browser.
    import brainimagelibrary as bil
    import pprint
 
-   result = bil.dois.get_datacite_citations(bildid="act-bag")
+   result = bil.datecite.dataset.get_citations(bildid="act-bag")
    pprint.pprint(result)

@@ -1,6 +1,21 @@
+import logging
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Optional
+
 from .retrieve import by_url as _retrieve_by_url
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "Dataset",
+    "Collection",
+    "dataset",
+    "collection",
+    "get_datacite_metadata",
+    "get_datacite_citations",
+    "get_number_of_citations",
+]
 
 MAX_WORKERS = 8
 
@@ -10,7 +25,7 @@ DOI_PREFIX = "10.35077"
 class Dataset:
     """DOI operations for individual BIL datasets."""
 
-    def get(self, bildid="act-bag"):
+    def get(self, bildid: str = "act-bag") -> Optional[dict]:
         """
         Retrieves metadata for a specific dataset from the DataCite API.
 
@@ -24,8 +39,8 @@ class Dataset:
                 or the dataset is not found.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> metadata = dois.dataset.get(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> metadata = datecite.dataset.get(bildid="act-bag")
             >>> print(type(metadata))
             <class 'dict'>
             >>> print("data" in metadata)
@@ -33,7 +48,7 @@ class Dataset:
         """
         return _get_datacite_metadata(bildid=bildid)
 
-    def get_datacite_citations(self, bildid="act-bag"):
+    def get_citations(self, bildid: str = "act-bag") -> dict:
         """
         Retrieves citation metadata for a specific dataset from multiple sources.
 
@@ -55,8 +70,8 @@ class Dataset:
                 Returns None for all keys if the DOI does not exist.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> result = dois.dataset.get_datacite_citations(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> result = datecite.dataset.get_citations(bildid="act-bag")
             >>> print(type(result))
             <class 'dict'>
             >>> print(list(result.keys()))
@@ -105,7 +120,7 @@ class Dataset:
                 results[futures[future]] = future.result()
         return results
 
-    def get_number_of_citations(self, bildid="act-bag"):
+    def get_number_of_citations(self, bildid: str = "act-bag") -> dict:
         """
         Retrieves the number of citations for a specific dataset.
 
@@ -123,8 +138,8 @@ class Dataset:
                 Returns None for all keys if the DOI does not exist.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> citations = dois.dataset.get_number_of_citations(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> citations = datecite.dataset.get_number_of_citations(bildid="act-bag")
             >>> print(type(citations))
             <class 'dict'>
             >>> print(list(citations.keys()))
@@ -151,7 +166,7 @@ class Dataset:
                 results[futures[future]] = future.result()
         return results
 
-    def exists(self, bildid="act-bag"):
+    def exists(self, bildid: str = "act-bag") -> bool:
         """
         Checks whether a dataset has a DOI registered in DataCite.
 
@@ -163,10 +178,10 @@ class Dataset:
             bool: True if the DOI exists in DataCite, False otherwise.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> dois.dataset.exists(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> datecite.dataset.exists(bildid="act-bag")
             True
-            >>> dois.dataset.exists(bildid="nonexistent-id")
+            >>> datecite.dataset.exists(bildid="nonexistent-id")
             False
         """
         return _doi_exists(bildid=bildid)
@@ -175,7 +190,7 @@ class Dataset:
 class Collection:
     """DOI operations for BIL collections."""
 
-    def get(self, bildid="act-bag"):
+    def get(self, bildid: str = "act-bag") -> Optional[dict]:
         """
         Retrieves metadata for a specific collection from the DataCite API.
 
@@ -189,8 +204,8 @@ class Collection:
                 or the collection is not found.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> metadata = dois.collection.get(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> metadata = datecite.collection.get(bildid="act-bag")
             >>> print(type(metadata))
             <class 'dict'>
             >>> print("data" in metadata)
@@ -200,7 +215,7 @@ class Collection:
             return None
         return _get_datacite_metadata(bildid=bildid)
 
-    def get_datasets(self, bildid="act-bag"):
+    def get_datasets(self, bildid: str = "act-bag") -> list:
         """
         Returns all download URLs for datasets in a collection.
 
@@ -219,8 +234,8 @@ class Collection:
                   metadata cannot be retrieved.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> urls = dois.collection.get_datasets(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> urls = datecite.collection.get_datasets(bildid="act-bag")
             >>> print(type(urls))
             <class 'list'>
         """
@@ -248,7 +263,7 @@ class Collection:
                 results.append({"bildid": None, "url": url})
         return results
 
-    def exists(self, bildid="act-bag"):
+    def exists(self, bildid: str = "act-bag") -> bool:
         """
         Checks whether a collection has a DOI registered in DataCite.
 
@@ -260,10 +275,10 @@ class Collection:
             bool: True if the DOI exists in DataCite, False otherwise.
 
         Example:
-            >>> from brainimagelibrary import dois
-            >>> dois.collection.exists(bildid="act-bag")
+            >>> from brainimagelibrary import datecite
+            >>> datecite.collection.exists(bildid="act-bag")
             True
-            >>> dois.collection.exists(bildid="nonexistent-id")
+            >>> datecite.collection.exists(bildid="nonexistent-id")
             False
         """
         return _doi_exists(bildid=bildid)
@@ -273,7 +288,7 @@ dataset = Dataset()
 collection = Collection()
 
 
-def get_datacite_metadata(bildid="act-bag"):
+def get_datacite_metadata(bildid: str = "act-bag") -> Optional[dict]:
     """
     Retrieves metadata for a specific dataset from the DataCite API.
 
@@ -287,8 +302,8 @@ def get_datacite_metadata(bildid="act-bag"):
             is not found.
 
     Example:
-        >>> from brainimagelibrary import dois
-        >>> metadata = dois.get_datacite_metadata(bildid="act-bag")
+        >>> from brainimagelibrary import datecite
+        >>> metadata = datecite.get_datacite_metadata(bildid="act-bag")
         >>> print(type(metadata))
         <class 'dict'>
         >>> print("data" in metadata)
@@ -297,7 +312,7 @@ def get_datacite_metadata(bildid="act-bag"):
     return _get_datacite_metadata(bildid=bildid)
 
 
-def get_datacite_citations(bildid="act-bag"):
+def get_datacite_citations(bildid: str = "act-bag") -> dict:
     """
     Retrieves citation metadata for a specific dataset from multiple sources.
 
@@ -319,39 +334,17 @@ def get_datacite_citations(bildid="act-bag"):
             Returns None for all keys if the DOI does not exist.
 
     Example:
-        >>> from brainimagelibrary import dois
-        >>> result = dois.get_datacite_citations(bildid="act-bag")
+        >>> from brainimagelibrary import datecite
+        >>> result = datecite.get_datacite_citations(bildid="act-bag")
         >>> print(type(result))
         <class 'dict'>
         >>> print(list(result.keys()))
         ['datacite', 'opencitations', 'crossref', 'semanticscholar']
-        >>> import pprint; pprint.pprint(result)  # doctest: +SKIP
-        {'crossref': None,
-         'datacite': None,
-         'opencitations': [{'author_sc': 'no',
-                            'cited': '10.35077/act-bag',
-                            'citing': '10.1038/s41586-023-06808-9',
-                            'creation': '2023-12-13',
-                            'journal_sc': 'no',
-                            'oci': '06320380336-06480144673',
-                            'timespan': '',
-                            'title': 'Molecularly defined and spatially resolved '
-                                     'cell atlas of the whole mouse brain'},
-                           {'author_sc': 'no',
-                            'cited': '10.35077/act-bag',
-                            'citing': '10.1101/2023.08.13.552987',
-                            'creation': '2023-08-15',
-                            'journal_sc': 'yes',
-                            'oci': '06404413343-06480144673',
-                            'timespan': '',
-                            'title': 'Search and Match across Spatial Omics '
-                                     'Samples at Single-cell Resolution'}],
-         'semanticscholar': None}
     """
-    return dataset.get_datacite_citations(bildid=bildid)
+    return dataset.get_citations(bildid=bildid)
 
 
-def get_number_of_citations(bildid="act-bag"):
+def get_number_of_citations(bildid: str = "act-bag") -> dict:
     """
     Retrieves the number of citations for a specific dataset.
 
@@ -369,8 +362,8 @@ def get_number_of_citations(bildid="act-bag"):
             Returns None for all keys if the DOI does not exist.
 
     Example:
-        >>> from brainimagelibrary import dois
-        >>> citations = dois.get_number_of_citations(bildid="act-bag")
+        >>> from brainimagelibrary import datecite
+        >>> citations = datecite.get_number_of_citations(bildid="act-bag")
         >>> print(type(citations))
         <class 'dict'>
         >>> print(list(citations.keys()))

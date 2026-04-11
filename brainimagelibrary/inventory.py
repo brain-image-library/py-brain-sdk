@@ -1,3 +1,6 @@
+"""Inventory retrieval and download utilities for Brain Image Library datasets."""
+
+import logging
 import requests
 import pandas as pd
 import gzip
@@ -5,11 +8,16 @@ import io
 import json
 import ast
 import os
+from typing import Optional, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
 
-def summary(bildid=None):
+__all__ = ["summary", "DatasetInventory", "to_manifest", "has", "get"]
+
+
+def summary(bildid: Optional[str] = None) -> Optional[dict]:
     """
     Summarizes inventory information for a dataset.
 
@@ -67,11 +75,11 @@ class DatasetInventory(dict):
     without needing to call module-level functions separately.
     """
 
-    def __init__(self, data, bildid):
+    def __init__(self, data: dict, bildid: str) -> None:
         super().__init__(data)
         self._bildid = bildid
 
-    def to_manifest(self, checksum="md5"):
+    def to_manifest(self, checksum: str = "md5") -> Optional[str]:
         """
         Writes a manifest file for this dataset.
 
@@ -94,14 +102,14 @@ class DatasetInventory(dict):
         """
         valid_checksums = ("md5", "sha256", "xxh64", "b2sum")
         if checksum not in valid_checksums:
-            print(
-                f"Error: checksum must be one of {valid_checksums}, got '{checksum}'."
+            logger.error(
+                "checksum must be one of %s, got '%s'.", valid_checksums, checksum
             )
             return None
 
         manifest = self.get("manifest", [])
         if not manifest:
-            print(f"Error: no manifest entries found for dataset '{self._bildid}'.")
+            logger.error("No manifest entries found for dataset '%s'.", self._bildid)
             return None
 
         df = pd.DataFrame(manifest)
@@ -113,7 +121,11 @@ class DatasetInventory(dict):
         df.to_csv(output_path, sep="\t", index=False)
         return output_path
 
-    def download(self, n=2, extensions=None):
+    def download(
+        self,
+        n: int = 2,
+        extensions: Optional[Union[str, list]] = None,
+    ) -> Optional[str]:
         """
         Downloads files in this dataset's manifest to a local folder.
 
@@ -141,7 +153,7 @@ class DatasetInventory(dict):
         """
         manifest = self.get("manifest", [])
         if not manifest:
-            print(f"Error: no manifest entries found for dataset '{self._bildid}'.")
+            logger.error("No manifest entries found for dataset '%s'.", self._bildid)
             return None
 
         folder = self._bildid
@@ -165,7 +177,7 @@ class DatasetInventory(dict):
             )
         ]
         if not urls:
-            print(f"Error: no download URLs found for dataset '{self._bildid}'.")
+            logger.error("No download URLs found for dataset '%s'.", self._bildid)
             return folder
 
         results = {"ok": 0, "skipped": 0, "failed": 0}
@@ -220,7 +232,7 @@ class DatasetInventory(dict):
                 return "ok", url
 
             except requests.exceptions.RequestException as e:
-                print(f"\nWarning: failed to download {url}: {e}")
+                logger.warning("Failed to download %s: %s", url, e)
                 return "failed", url
 
         with tqdm(total=len(urls), desc="Overall", unit="file") as overall:
@@ -236,14 +248,16 @@ class DatasetInventory(dict):
                     )
                     overall.update(1)
 
-        print(
-            f"\nDownload complete: {results['ok']} downloaded, "
-            f"{results['skipped']} skipped, {results['failed']} failed."
+        logger.info(
+            "Download complete: %d downloaded, %d skipped, %d failed.",
+            results["ok"],
+            results["skipped"],
+            results["failed"],
         )
         return folder
 
 
-def to_manifest(bildid=None, checksum="md5"):
+def to_manifest(bildid: Optional[str] = None, checksum: str = "md5") -> Optional[str]:
     """
     Writes a manifest file for a dataset.
 
@@ -269,7 +283,7 @@ def to_manifest(bildid=None, checksum="md5"):
         'act-bag.manifest'
     """
     if bildid is None:
-        print("Error: bildid must be provided.")
+        logger.error("bildid must be provided.")
         return None
 
     data = get(bildid=bildid)
@@ -279,7 +293,7 @@ def to_manifest(bildid=None, checksum="md5"):
     return data.to_manifest(checksum=checksum)
 
 
-def has(bildid=None):
+def has(bildid: Optional[str] = None) -> bool:
     """
     Checks whether the inventory file for a dataset exists and is accessible.
 
@@ -308,7 +322,7 @@ def has(bildid=None):
         return False
 
 
-def get(bildid=None):
+def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
     """
     Retrieves inventory information for a dataset by its ID from a compressed JSON (.json.gz).
 
@@ -329,7 +343,7 @@ def get(bildid=None):
         ['number_of_files', 'size', 'pretty_size', 'manifest', 'file_types', 'frequencies', 'mime_types']
     """
     if bildid is None:
-        print("Error: bildid must be provided.")
+        logger.error("bildid must be provided.")
         return None
 
     filename = f"{bildid}.json.gz"
@@ -338,7 +352,7 @@ def get(bildid=None):
     try:
         resp = requests.get(url, timeout=30)
         if resp.status_code != 200:
-            print(f"Error: received status code {resp.status_code} for {url}")
+            logger.error("Received status code %d for %s.", resp.status_code, url)
             return None
 
         try:
@@ -350,12 +364,12 @@ def get(bildid=None):
                 data = ast.literal_eval(raw.decode("utf-8"))
             return DatasetInventory(data, bildid)
         except gzip.BadGzipFile:
-            print("Error: Response is not a valid gzip file.")
+            logger.error("Response is not a valid gzip file.")
             return None
         except (ValueError, SyntaxError) as e:
-            print(f"Error: Decompressed content could not be parsed: {e}")
+            logger.error("Decompressed content could not be parsed: %s", e)
             return None
 
     except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
+        logger.error("Error making API request: %s", e)
         return None

@@ -13,9 +13,9 @@ Usage:
     python examples/daily.py
 """
 
-import brainimagelibrary as brainzzz
+import brainimagelibrary as bil
 
-df = brainzzz.reports.daily()
+df = bil.reports.daily()
 
 if df is None or df.empty:
     print("Daily report could not be retrieved.")

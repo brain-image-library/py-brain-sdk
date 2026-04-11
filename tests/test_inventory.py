@@ -135,12 +135,13 @@ def test_to_manifest_writes_file(tmp_path, monkeypatch):
 
 # --- DatasetInventory.to_manifest() ---
 
-def test_dataset_inventory_to_manifest_invalid_checksum(capsys):
+def test_dataset_inventory_to_manifest_invalid_checksum(caplog):
+    import logging
     di = DatasetInventory(SAMPLE_INVENTORY, "act-bag")
-    result = di.to_manifest(checksum="crc32")
+    with caplog.at_level(logging.ERROR, logger="brainimagelibrary.inventory"):
+        result = di.to_manifest(checksum="crc32")
     assert result is None
-    captured = capsys.readouterr()
-    assert "checksum must be one of" in captured.out
+    assert "checksum must be one of" in caplog.text
 
 
 def test_dataset_inventory_to_manifest_valid_checksums(tmp_path, monkeypatch):
@@ -151,14 +152,15 @@ def test_dataset_inventory_to_manifest_valid_checksums(tmp_path, monkeypatch):
         assert path == "act-bag.manifest"
 
 
-def test_dataset_inventory_to_manifest_empty_manifest(capsys):
+def test_dataset_inventory_to_manifest_empty_manifest(caplog):
+    import logging
     data = dict(SAMPLE_INVENTORY)
     data["manifest"] = []
     di = DatasetInventory(data, "act-bag")
-    result = di.to_manifest()
+    with caplog.at_level(logging.ERROR, logger="brainimagelibrary.inventory"):
+        result = di.to_manifest()
     assert result is None
-    captured = capsys.readouterr()
-    assert "no manifest entries" in captured.out
+    assert "no manifest entries" in caplog.text.lower()
 
 
 # --- summary() ---

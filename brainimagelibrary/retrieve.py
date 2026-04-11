@@ -1,7 +1,22 @@
-import requests
+"""Retrieve dataset metadata from the Brain Image Library /retrieve endpoint."""
+
+import logging
+from typing import Optional
+
+from ._api import BIL_API_BASE, DOWNLOAD_BASE, _fetch
+
+logger = logging.getLogger(__name__)
+
+__all__ = ["by_id", "by_directory", "by_url", "by_affiliation", "by_version"]
+
+_ENDPOINT = f"{BIL_API_BASE}/retrieve"
 
 
-def by_id(bildid=None, params=None, headers=None):
+def by_id(
+    bildid: Optional[str] = None,
+    params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> Optional[dict]:
     """
     Retrieves metadata for a dataset by its Brain Image Library ID.
 
@@ -32,26 +47,14 @@ def by_id(bildid=None, params=None, headers=None):
     """
     if not bildid:
         return {}
-
-    api_url = f"https://api.brainimagelibrary.org/retrieve?bildid={bildid}"
-
-    try:
-        response = requests.get(api_url, params=params, headers=headers)
-        response = response.json()
-        if (
-            "message" in response.keys()
-            and response["message"] == "GET failure, no entry found"
-        ):
-            return {}
-        else:
-            return response
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-        return None
+    return _fetch(f"{_ENDPOINT}?bildid={bildid}", params=params, headers=headers)
 
 
-def by_directory(directory=None, params=None, headers=None):
+def by_directory(
+    directory: Optional[str] = None,
+    params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> Optional[dict]:
     """
     Retrieves metadata for a dataset by its directory path.
 
@@ -82,28 +85,10 @@ def by_directory(directory=None, params=None, headers=None):
     """
     if not directory:
         return {}
-
-    api_url = (
-        f"https://api.brainimagelibrary.org/retrieve?bildirectory={directory}"
-    )
-
-    try:
-        response = requests.get(api_url, params=params, headers=headers)
-        response = response.json()
-        if (
-            "message" in response.keys()
-            and response["message"] == "GET failure, no entry found"
-        ):
-            return {}
-        else:
-            return response
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-        return None
+    return _fetch(f"{_ENDPOINT}?bildirectory={directory}", params=params, headers=headers)
 
 
-def by_url(url=None):
+def by_url(url: Optional[str] = None) -> Optional[dict]:
     """
     Retrieves metadata for a dataset by its download URL.
 
@@ -130,11 +115,15 @@ def by_url(url=None):
     """
     if not url:
         return {}
-    directory = url.replace("https://download.brainimagelibrary.org", "/bil/data")
+    directory = url.replace(DOWNLOAD_BASE, "/bil/data")
     return by_directory(directory=directory)
 
 
-def by_affiliation(affiliation, params=None, headers=None):
+def by_affiliation(
+    affiliation: str,
+    params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> Optional[dict]:
     """
     Retrieves datasets associated with a contributor's affiliation.
 
@@ -166,26 +155,10 @@ def by_affiliation(affiliation, params=None, headers=None):
         >>> print(len(results) > 0)
         True
     """
-    api_url = f"https://api.brainimagelibrary.org/retrieve?affiliation={affiliation}"
-
-    try:
-        response = requests.get(api_url, params=params, headers=headers)
-
-        response = response.json()
-        if (
-            "message" in response.keys()
-            and response["message"] == "GET failure, no entry found"
-        ):
-            return {}
-        else:
-            return response
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-        return None
+    return _fetch(f"{_ENDPOINT}?affiliation={affiliation}", params=params, headers=headers)
 
 
-def by_version(version="2.0"):
+def by_version(version: str = "2.0") -> Optional[list]:
     """
     Retrieves dataset IDs based on metadata version.
 
@@ -211,19 +184,7 @@ def by_version(version="2.0"):
         >>> print(len(ids) > 0)
         True
     """
-    api_url = f"https://api.brainimagelibrary.org/retrieve?metadata={version}"
-
-    try:
-        response = requests.get(api_url)
-        response = response.json()
-        if (
-            "message" in response.keys()
-            and response["message"] == "GET failure, no entry found"
-        ):
-            return {}
-        else:
-            return response["bildids"]
-
-    except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
-        return None
+    data = _fetch(f"{_ENDPOINT}?metadata={version}")
+    if not data:
+        return data  # None (request failed) or {} (not found)
+    return data.get("bildids")

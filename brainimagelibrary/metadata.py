@@ -1,7 +1,20 @@
+"""Metadata retrieval for Brain Image Library datasets."""
+
+import logging
+from typing import Optional
+
 import requests
 
+logger = logging.getLogger(__name__)
 
-def get(bildid=None, params=None, headers=None):
+__all__ = ["get"]
+
+
+def get(
+    bildid: Optional[str] = None,
+    params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> Optional[dict]:
     """
     Retrieves metadata for a dataset by its Brain Image Library ID.
 
@@ -45,5 +58,5 @@ def get(bildid=None, params=None, headers=None):
             return response
 
     except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
+        logger.error("Error making API request: %s", e)
         return None

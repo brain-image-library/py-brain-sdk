@@ -34,12 +34,15 @@ The SDK exposes five modules, each focused on a specific area of functionality:
    * - Module
      - Description
    * - ``retrieve``
-     - Fetch datasets and files by BIL dataset ID, directory path, or version.
+     - Fetch dataset metadata by BIL dataset ID, directory path, URL, affiliation, or version.
+   * - ``query``
+     - Query datasets by BIL ID, directory path, URL, affiliation, version, or free-text search.
    * - ``metadata``
-     - Query dataset metadata by keyword, contributor, affiliation, or free-text search.
+     - Retrieve raw dataset metadata by BIL dataset ID.
    * - ``inventory``
-     - Browse and enumerate BIL data collections and their constituent datasets.
-   * - ``dois``
+     - Download and parse per-dataset file inventories, with support for manifest export
+       and parallel file download.
+   * - ``datecite``
      - Look up DOI registration, citation counts, and citation records from DataCite,
        OpenCitations, Crossref, and Semantic Scholar.
    * - ``reports`` / ``summary``
@@ -57,10 +60,10 @@ keyword search::
     metadata = bil.retrieve.by_id(bildid="act-bag")
 
     # Full-text search across all datasets
-    results = bil.metadata.query("mouse cortex")
+    results = bil.query.by_text("mouse cortex")
 
     # Look up citation counts from multiple sources
-    citations = bil.dois.dataset.get_number_of_citations(bildid="act-bag")
+    citations = bil.datecite.dataset.get_number_of_citations(bildid="act-bag")
     # {'datacite': 2, 'opencitations': 1, 'crossref': 0, 'semanticscholar': 3}
 
 See the :doc:`installation` page to get started, and the API Reference for full module documentation.
@@ -83,5 +86,5 @@ and run the code directly in your browser.
    import brainimagelibrary as bil
    import pprint
 
-   result = bil.dois.get_datacite_citations(bildid="act-bag")
+   result = bil.datecite.get_datacite_citations(bildid="act-bag")
    pprint.pprint(result)

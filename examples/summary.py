@@ -10,32 +10,31 @@ Usage:
     python examples/summary.py
 """
 
-import brainimagelibrary as brainzzz
+import brainimagelibrary as bil
 
 # --- Example 1: today's summary -------------------------------------------
 
 print("Fetching daily BIL summary...")
-result = brainzzz.summary.daily()
+result = bil.summary.daily()
 
-if result is None:
-    print("Summary not available.")
-else:
-    print(f"Number of datasets          : {result['number_of_datasets']}")
-    print(f"Total files                 : {result['number_of_files']}")
-    print(f"Unique contributors         : {result['number_of_unique_contributors']}")
-    print(f"Unique affiliations         : {result['number_of_unique_affiliations']}")
-    print(f"Unique species              : {result['number_of_unique_species']}")
-    print()
-    print("=== Metadata Versions ===")
-    print(result["metadata_version"].to_string())
+print(f"Number of datasets          : {result['number_of_datasets']}")
+print(f"Total files                 : {result['number_of_files']}")
+print(f"Unique contributors         : {result['number_of_unique_contributors']}")
+print(f"Unique affiliations         : {result['number_of_unique_affiliations']}")
+print(f"Unique species              : {result['number_of_unique_species']}")
+print()
+print("=== Metadata Versions ===")
+print(result["metadata_version"].to_string())
 
 # --- Example 2: load inventory for a specific date -------------------------
 
 print()
 date = "20240101"
 print(f"Loading inventory report for {date}...")
-df = brainzzz.summary.load(date)
+df = bil.summary.load(date)
 
 if df is not None:
     print(f"Loaded {len(df)} records.")
     print(df.head())
+else:
+    print(f"No data available for {date}.")

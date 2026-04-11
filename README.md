@@ -50,32 +50,32 @@ bildids = bil.get_all_bildids()
 print(f"Total datasets: {len(bildids)}")
 ```
 
-### DOI and citation lookup
+### DOI and citation lookup (`datecite`)
 
 ```python
-from brainimagelibrary import dois
+from brainimagelibrary import datecite
 
 # Check if a dataset has a registered DOI
-dois.dataset.exists(bildid="act-bag")
+datecite.dataset.exists(bildid="act-bag")
 
 # Get DataCite metadata
-metadata = dois.dataset.get(bildid="act-bag")
+metadata = datecite.dataset.get(bildid="act-bag")
 
-# Get citation counts from multiple sources
-citations = dois.dataset.get_number_of_citations(bildid="act-bag")
+# Get citation counts from DataCite, OpenCitations, Crossref, and Semantic Scholar
+citations = datecite.dataset.get_number_of_citations(bildid="act-bag")
 # {‘datacite’: 2, ‘opencitations’: 1, ‘crossref’: 0, ‘semanticscholar’: 3}
 
-# Get full citation records
-records = dois.dataset.get_datacite_citations(bildid="act-bag")
+# Get full citation records from all sources
+records = datecite.dataset.get_citations(bildid="act-bag")
 ```
 
 ### Collection operations
 
 ```python
-from brainimagelibrary import dois
+from brainimagelibrary import datecite
 
 # List all datasets in a collection
-datasets = dois.collection.get_datasets(bildid="act-bag")
+datasets = datecite.collection.get_datasets(bildid="g.19")
 for entry in datasets:
     print(entry["bildid"], entry["url"])
 ```

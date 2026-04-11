@@ -21,4 +21,4 @@ a petabyte-scale repository of brain microscopy datasets.
    api/inventory
    api/reports
    api/summary
-   api/dois
+   api/datecite

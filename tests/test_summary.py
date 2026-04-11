@@ -53,30 +53,32 @@ def test_load_downloads_when_bil_path_missing(tmp_path):
     assert result is not None
 
 
-def test_load_returns_none_when_download_fails(capsys):
+def test_load_returns_none_when_download_fails(caplog):
+    import logging
     with patch("brainimagelibrary.summary.Path") as mock_path_cls, \
-         patch("brainimagelibrary.summary.requests.get") as mock_get:
+         patch("brainimagelibrary.summary.requests.get") as mock_get, \
+         caplog.at_level(logging.WARNING, logger="brainimagelibrary.summary"):
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = False
         mock_path_cls.return_value = mock_path_instance
         mock_get.return_value = make_mock_response(status_code=404)
         result = summary.load("19000101")
     assert result is None
-    captured = capsys.readouterr()
-    assert "unavailable" in captured.out
+    assert "unavailable" in caplog.text
 
 
-def test_load_returns_none_on_request_exception(capsys):
+def test_load_returns_none_on_request_exception(caplog):
+    import logging
     with patch("brainimagelibrary.summary.Path") as mock_path_cls, \
-         patch("brainimagelibrary.summary.requests.get") as mock_get:
+         patch("brainimagelibrary.summary.requests.get") as mock_get, \
+         caplog.at_level(logging.WARNING, logger="brainimagelibrary.summary"):
         mock_path_instance = MagicMock()
         mock_path_instance.exists.return_value = False
         mock_path_cls.return_value = mock_path_instance
         mock_get.side_effect = requests.exceptions.RequestException("timeout")
         result = summary.load("20240101")
     assert result is None
-    captured = capsys.readouterr()
-    assert "unavailable" in captured.out
+    assert "unavailable" in caplog.text
 
 
 # --- daily() ---

@@ -8,6 +8,9 @@ from brainimagelibrary import retrieve
 VALID_RESPONSE = {"retjson": [{"bildid": "act-bag", "title": "Test Dataset"}]}
 NOT_FOUND_RESPONSE = {"message": "GET failure, no entry found"}
 
+# Patch target: requests.get lives in _api after the refactor
+_PATCH = "brainimagelibrary._api.requests.get"
+
 
 def make_mock_response(json_data, status_code=200):
     mock = MagicMock()
@@ -24,7 +27,7 @@ def test_by_id_returns_empty_dict_when_no_bildid():
 
 
 def test_by_id_returns_metadata_on_success():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(VALID_RESPONSE)
         result = retrieve.by_id(bildid="act-bag")
     assert result == VALID_RESPONSE
@@ -34,14 +37,14 @@ def test_by_id_returns_metadata_on_success():
 
 
 def test_by_id_returns_empty_dict_when_not_found():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(NOT_FOUND_RESPONSE)
         result = retrieve.by_id(bildid="nonexistent")
     assert result == {}
 
 
 def test_by_id_returns_none_on_request_exception():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.side_effect = requests.exceptions.RequestException("network error")
         result = retrieve.by_id(bildid="act-bag")
     assert result is None
@@ -55,7 +58,7 @@ def test_by_directory_returns_empty_dict_when_no_directory():
 
 
 def test_by_directory_returns_metadata_on_success():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(VALID_RESPONSE)
         result = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012")
     assert result == VALID_RESPONSE
@@ -64,14 +67,14 @@ def test_by_directory_returns_metadata_on_success():
 
 
 def test_by_directory_returns_empty_dict_when_not_found():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(NOT_FOUND_RESPONSE)
         result = retrieve.by_directory(directory="/bil/data/missing")
     assert result == {}
 
 
 def test_by_directory_returns_none_on_request_exception():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.side_effect = requests.exceptions.RequestException("timeout")
         result = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012")
     assert result is None
@@ -97,7 +100,7 @@ def test_by_url_delegates_to_by_directory():
 # --- by_affiliation ---
 
 def test_by_affiliation_returns_metadata_on_success():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(VALID_RESPONSE)
         result = retrieve.by_affiliation("Carnegie Mellon University")
     assert result == VALID_RESPONSE
@@ -106,14 +109,14 @@ def test_by_affiliation_returns_metadata_on_success():
 
 
 def test_by_affiliation_returns_empty_dict_when_not_found():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(NOT_FOUND_RESPONSE)
         result = retrieve.by_affiliation("Unknown University")
     assert result == {}
 
 
 def test_by_affiliation_returns_none_on_request_exception():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.side_effect = requests.exceptions.RequestException("timeout")
         result = retrieve.by_affiliation("Carnegie Mellon University")
     assert result is None
@@ -123,7 +126,7 @@ def test_by_affiliation_returns_none_on_request_exception():
 
 def test_by_version_returns_list_of_ids_on_success():
     api_response = {"bildids": ["act-bag", "xyz-abc"]}
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(api_response)
         result = retrieve.by_version(version="2.0")
     assert result == ["act-bag", "xyz-abc"]
@@ -132,14 +135,14 @@ def test_by_version_returns_list_of_ids_on_success():
 
 
 def test_by_version_returns_empty_dict_when_not_found():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(NOT_FOUND_RESPONSE)
         result = retrieve.by_version(version="99.0")
     assert result == {}
 
 
 def test_by_version_returns_none_on_request_exception():
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.side_effect = requests.exceptions.RequestException("timeout")
         result = retrieve.by_version()
     assert result is None
@@ -147,7 +150,7 @@ def test_by_version_returns_none_on_request_exception():
 
 def test_by_version_defaults_to_2_0():
     api_response = {"bildids": ["act-bag"]}
-    with patch("brainimagelibrary.retrieve.requests.get") as mock_get:
+    with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(api_response)
         retrieve.by_version()
     assert "metadata=2.0" in mock_get.call_args[0][0]
