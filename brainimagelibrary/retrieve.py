@@ -7,7 +7,7 @@ from ._api import BIL_API_BASE, DOWNLOAD_BASE, _fetch
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["by_id", "by_directory", "by_url", "by_affiliation", "by_version"]
+__all__ = ["by_id", "by_directory", "by_url", "by_affiliation"]
 
 _ENDPOINT = f"{BIL_API_BASE}/retrieve"
 
@@ -156,35 +156,3 @@ def by_affiliation(
         True
     """
     return _fetch(f"{_ENDPOINT}?affiliation={affiliation}", params=params, headers=headers)
-
-
-def by_version(version: str = "2.0") -> Optional[list]:
-    """
-    Retrieves dataset IDs based on metadata version.
-
-    This function sends a GET request to the Brain Image Library API to fetch
-    dataset IDs associated with a specific metadata version.
-
-    Args:
-        version (str, optional): The metadata version to query. Defaults to "2.0".
-
-    Returns:
-        list: A list of dataset IDs (`bildids`) if the request is successful.
-        dict: An empty dictionary if no datasets are found for the specified version.
-        None: If the request fails or encounters an exception.
-
-    Raises:
-        requests.exceptions.RequestException: If an error occurs during the API request.
-
-    Example:
-        >>> from brainimagelibrary.metadata import retrieve
-        >>> ids = retrieve.by_version(version="1.0")
-        >>> print(type(ids))
-        <class 'list'>
-        >>> print(len(ids) > 0)
-        True
-    """
-    data = _fetch(f"{_ENDPOINT}?metadata={version}")
-    if not data:
-        return data  # None (request failed) or {} (not found)
-    return data.get("bildids")

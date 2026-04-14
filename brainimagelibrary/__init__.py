@@ -6,8 +6,9 @@ __version__ = "0.0.23"
 __author__ = "Ivan Cao-Berg"
 __credits__ = "Brain Image Library Team"
 
-from .retrieve import by_id, by_directory, by_url, by_version
+from .retrieve import by_id, by_directory, by_url
 from . import metadata
+from . import query
 from .metadata import *
 from .reports import *
 from .inventory import *
@@ -21,11 +22,11 @@ __all__ = [
     "__credits__",
     # submodules
     "metadata",
+    "query",
     # retrieve shortcuts
     "by_id",
     "by_directory",
     "by_url",
-    "by_version",
     # inventory
     "summary",
     "DatasetInventory",

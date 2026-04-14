@@ -24,7 +24,7 @@ import logging
 import requests
 from typing import Optional
 
-from .retrieve import by_id, by_version
+from .query import by_id, by_version
 from .inventory import get as inventory_get
 from tqdm import tqdm
 from pathlib import Path

@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["summary", "DatasetInventory", "to_manifest", "has", "get"]
+__all__ = ["summary", "DatasetInventory", "to_manifest", "exists", "has", "get"]
 
 
 def summary(bildid: Optional[str] = None) -> Optional[dict]:
@@ -120,6 +120,43 @@ class DatasetInventory(dict):
         output_path = f"{self._bildid}.manifest"
         df.to_csv(output_path, sep="\t", index=False)
         return output_path
+
+    def rename(self, new_name: str) -> Optional[str]:
+        """
+        Renames the local download folder for this dataset.
+
+        If the folder ``<bildid>/`` exists on disk it is renamed to
+        ``<new_name>/``.  The internal identifier is updated so that
+        subsequent calls to :meth:`download` and :meth:`to_manifest` use
+        the new name.
+
+        Args:
+            new_name (str): The new folder name.
+
+        Returns:
+            str | None: The new folder path on success, or None on failure.
+
+        Example:
+            >>> from brainimagelibrary import inventory
+            >>> dataset = inventory.get(bildid="act-bag")
+            >>> new_path = dataset.rename("act-bag-renamed")
+            >>> print(new_path)
+            'act-bag-renamed'
+        """
+        if not new_name:
+            logger.error("new_name must be a non-empty string.")
+            return None
+
+        old_folder = self._bildid
+        if os.path.exists(old_folder):
+            try:
+                os.rename(old_folder, new_name)
+            except OSError as e:
+                logger.error("Failed to rename '%s' to '%s': %s", old_folder, new_name, e)
+                return None
+
+        self._bildid = new_name
+        return new_name
 
     def download(
         self,
@@ -293,7 +330,7 @@ def to_manifest(bildid: Optional[str] = None, checksum: str = "md5") -> Optional
     return data.to_manifest(checksum=checksum)
 
 
-def has(bildid: Optional[str] = None) -> bool:
+def exists(bildid: Optional[str] = None) -> bool:
     """
     Checks whether the inventory file for a dataset exists and is accessible.
 
@@ -305,9 +342,9 @@ def has(bildid: Optional[str] = None) -> bool:
 
     Example:
         >>> from brainimagelibrary import inventory
-        >>> inventory.has(bildid="act-bag")
+        >>> inventory.exists(bildid="act-bag")
         True
-        >>> inventory.has(bildid="nonexistent-id")
+        >>> inventory.exists(bildid="nonexistent-id")
         False
     """
     if bildid is None:
@@ -320,6 +357,48 @@ def has(bildid: Optional[str] = None) -> bool:
         return resp.status_code == 200
     except requests.exceptions.RequestException:
         return False
+
+
+def has(bildid: Optional[str] = None, option: Optional[str] = None) -> Optional[bool]:
+    """
+    Checks whether a dataset contains files of a given type.
+
+    First verifies the dataset exists via :func:`exists`, then retrieves its
+    inventory and checks whether ``option`` appears in the ``file_types``
+    field. If ``option`` is ``'cell_by_gene'``, returns True if any manifest
+    entry has ``is_cell_by_gene`` set to True.
+
+    Args:
+        bildid (str, optional): The unique identifier for the dataset. Defaults to None.
+        option (str, optional): The file type/extension to look for, or
+            ``'cell_by_gene'`` to check for cell-by-gene files. Defaults to None.
+
+    Returns:
+        bool | None: True if the condition is met, False if not, or None if the
+            dataset does not exist.
+
+    Example:
+        >>> from brainimagelibrary import inventory
+        >>> inventory.has(bildid="act-bag", option="tif")
+        True
+        >>> inventory.has(bildid="act-bag", option="xyz")
+        False
+        >>> inventory.has(bildid="nonexistent", option="tif")
+        None
+    """
+    if not exists(bildid=bildid):
+        return None
+
+    data = get(bildid=bildid)
+    if data is None:
+        return False
+
+    if option == "cell_by_gene":
+        manifest = data.get("manifest", [])
+        return any(entry.get("is_cell_by_gene") is True for entry in manifest)
+
+    file_types = data.get("file_types", {})
+    return option in file_types
 
 
 def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:

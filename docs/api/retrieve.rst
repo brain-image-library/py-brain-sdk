@@ -1,7 +1,7 @@
 retrieve
 ========
 
-Low-level API query functions for fetching datasets by ID, directory, or version.
+Low-level API query functions for fetching datasets by ID, directory, URL, or affiliation.
 
 .. automodule:: brainimagelibrary.retrieve
    :members:

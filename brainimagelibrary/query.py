@@ -222,7 +222,7 @@ def by_version(version: str = "2.0") -> Optional[list]:
         >>> print(len(ids) > 0)
         True
     """
-    data = _fetch(f"{_ENDPOINT}?metadata={version}")
+    data = _fetch(f"{_ENDPOINT}/submission?metadata={version}")
     if not data:
         return data  # None (request failed) or {} (not found)
     return data.get("bildids")

@@ -42,29 +42,29 @@ def make_mock_response(status_code=200, content=b""):
     return mock
 
 
-# --- has() ---
+# --- exists() ---
 
 def test_has_returns_false_when_no_bildid():
-    assert inventory.has(bildid=None) is False
-    assert inventory.has() is False
+    assert inventory.exists(bildid=None) is False
+    assert inventory.exists() is False
 
 
 def test_has_returns_true_when_head_200():
     with patch("brainimagelibrary.inventory.requests.head") as mock_head:
         mock_head.return_value = MagicMock(status_code=200)
-        assert inventory.has(bildid="act-bag") is True
+        assert inventory.exists(bildid="act-bag") is True
 
 
 def test_has_returns_false_when_head_404():
     with patch("brainimagelibrary.inventory.requests.head") as mock_head:
         mock_head.return_value = MagicMock(status_code=404)
-        assert inventory.has(bildid="nonexistent") is False
+        assert inventory.exists(bildid="nonexistent") is False
 
 
 def test_has_returns_false_on_request_exception():
     with patch("brainimagelibrary.inventory.requests.head") as mock_head:
         mock_head.side_effect = requests.exceptions.RequestException("timeout")
-        assert inventory.has(bildid="act-bag") is False
+        assert inventory.exists(bildid="act-bag") is False
 
 
 # --- get() ---

@@ -157,7 +157,7 @@ def test_by_version_uses_query_endpoint():
     with patch(_PATCH) as mock_get:
         mock_get.return_value = make_mock_response(api_response)
         query.by_version()
-    assert "/query?" in mock_get.call_args[0][0]
+    assert "/query/submission?" in mock_get.call_args[0][0]
     assert "metadata=2.0" in mock_get.call_args[0][0]
 
 

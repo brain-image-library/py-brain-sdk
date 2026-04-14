@@ -120,37 +120,3 @@ def test_by_affiliation_returns_none_on_request_exception():
         mock_get.side_effect = requests.exceptions.RequestException("timeout")
         result = retrieve.by_affiliation("Carnegie Mellon University")
     assert result is None
-
-
-# --- by_version ---
-
-def test_by_version_returns_list_of_ids_on_success():
-    api_response = {"bildids": ["act-bag", "xyz-abc"]}
-    with patch(_PATCH) as mock_get:
-        mock_get.return_value = make_mock_response(api_response)
-        result = retrieve.by_version(version="2.0")
-    assert result == ["act-bag", "xyz-abc"]
-    assert "metadata=2.0" in mock_get.call_args[0][0]
-    assert "/retrieve?" in mock_get.call_args[0][0]
-
-
-def test_by_version_returns_empty_dict_when_not_found():
-    with patch(_PATCH) as mock_get:
-        mock_get.return_value = make_mock_response(NOT_FOUND_RESPONSE)
-        result = retrieve.by_version(version="99.0")
-    assert result == {}
-
-
-def test_by_version_returns_none_on_request_exception():
-    with patch(_PATCH) as mock_get:
-        mock_get.side_effect = requests.exceptions.RequestException("timeout")
-        result = retrieve.by_version()
-    assert result is None
-
-
-def test_by_version_defaults_to_2_0():
-    api_response = {"bildids": ["act-bag"]}
-    with patch(_PATCH) as mock_get:
-        mock_get.return_value = make_mock_response(api_response)
-        retrieve.by_version()
-    assert "metadata=2.0" in mock_get.call_args[0][0]
