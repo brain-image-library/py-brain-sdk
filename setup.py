@@ -5,7 +5,7 @@ long_description = Path("README.md").read_text(encoding="utf-8")
 
 setup(
     name="brainimagelibrary",
-    version="0.0.23",
+    version="0.0.24",
     description="Brain Image Library API",
     long_description=long_description,
     long_description_content_type="text/markdown",
