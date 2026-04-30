@@ -9,19 +9,22 @@ Public functions
 ----------------
 daily(option, overwrite)
     Return today's inventory report as a :class:`pandas.DataFrame`.
-get_bildids()
+get_all_bildids()
     Return all unique dataset IDs across metadata versions 1.0 and 2.0.
 
 Private helpers (not part of the public API)
 ---------------------------------------------
-__get_did(bildid)
+_get_did(bildid)
     Fetch combined metadata + inventory data for a single dataset.
-__create_daily_report(overwrite)
+_create_daily_report(overwrite)
     Build the daily report locally when the remote download fails.
 """
 
+import logging
 import requests
-from .retrieve import by_id, by_version
+from typing import Optional
+
+from .query import by_id, by_version
 from .inventory import get as inventory_get
 from tqdm import tqdm
 from pathlib import Path
@@ -29,8 +32,12 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import pandas as pd
 
+logger = logging.getLogger(__name__)
 
-def __get_did(bildid):
+__all__ = ["daily", "get_all_bildids"]
+
+
+def _get_did(bildid: str) -> dict:
     """
     Retrieves detailed metadata for a dataset by its ID.
 
@@ -94,7 +101,7 @@ def __get_did(bildid):
     }
 
 
-def daily(option="simple", overwrite=False):
+def daily(option: str = "simple", overwrite: bool = False) -> pd.DataFrame:
     """
     Retrieve the daily inventory report from the Brain Image Library.
 
@@ -102,9 +109,15 @@ def daily(option="simple", overwrite=False):
 
     1. Load ``/bil/data/inventory/daily/reports/today.json`` from the BIL
        shared filesystem if it exists (and ``overwrite`` is ``False``).
+<<<<<<< HEAD
     2. If the local file is absent, download ``today.json`` from
        ``https://download.brainimagelibrary.org/inventory/daily/reports/today.json``.
     3. If the download also fails, print a warning and fall back to
+=======
+    2. If the local file is absent, download the report from the web
+       (URL depends on ``option``).
+    3. If the download also fails, log a warning and fall back to
+>>>>>>> e0193ad84f151b8be9a0eca9cfafa8c1500f0b7a
        :func:`__create_daily_report` to build the report locally.
 
     Args:
@@ -137,18 +150,35 @@ def daily(option="simple", overwrite=False):
         <class 'pandas.core.frame.DataFrame'>
     """
 
+<<<<<<< HEAD
+=======
+    def fetch_and_load_csv(url, file_path):
+        """Helper function to download and load a TSV file as a DataFrame."""
+        try:
+            response = requests.get(url, timeout=30)
+            if response.status_code == 200:
+                with open(file_path, "wb") as file:
+                    file.write(response.content)
+                return pd.read_csv(file_path, sep="\t")
+            else:
+                return None
+        except requests.exceptions.RequestException as e:
+            logger.error("Error fetching URL %s: %s", url, e)
+            return None
+
+>>>>>>> e0193ad84f151b8be9a0eca9cfafa8c1500f0b7a
     if option not in ("simple", "detailed"):
         raise ValueError(f"Invalid option '{option}'. Choose 'simple' or 'detailed'.")
 
     # Step 1: try local BIL filesystem JSON cache
     local_json = Path("/bil/data/inventory/daily/reports/today.json")
     if not overwrite and local_json.exists():
-        print(f"Loading daily report from {local_json}.")
+        logger.info("Loading daily report from %s.", local_json)
         try:
             return pd.read_json(local_json)
         except ValueError:
-            print(
-                f"Warning: {local_json} is empty or corrupt, falling back to download."
+            logger.warning(
+                "%s is empty or corrupt, falling back to download.", local_json
             )
 
     # Step 2: attempt HTTPS download of today.json
@@ -164,11 +194,15 @@ def daily(option="simple", overwrite=False):
         print(f"Warning: could not fetch {remote_json_url}: {e}")
 
     # Step 3: build from scratch if download failed
-    print("Building report from scratch...")
-    return __create_daily_report(overwrite)
+    if df is None:
+        logger.warning(
+            "Cannot download daily report from %s. Building report from scratch...", url
+        )
+        df = _create_daily_report(overwrite)
 
+    return df
 
-def __create_daily_report(overwrite=False):
+def _create_daily_report(overwrite: bool = False) -> pd.DataFrame:
     """
     Create or load the daily inventory report from local storage.
 
@@ -204,21 +238,21 @@ def __create_daily_report(overwrite=False):
     if not overwrite:
         bil_path = Path(f"/bil/data/inventory/daily/{today}.tsv")
         if bil_path.exists():
-            print(f"Daily report {bil_path} found on disk.")
+            logger.info("Daily report %s found on disk.", bil_path)
             return pd.read_csv(bil_path, sep="\t")
 
         local_path = Path(f"reports/{today}.tsv")
         if local_path.exists():
-            print(f"Daily report {local_path} found on disk.")
+            logger.info("Daily report %s found on disk.", local_path)
             return pd.read_csv(local_path, sep="\t")
 
-    all_datasets = get_bildids()
+    all_datasets = get_all_bildids()
 
-    print(f"Processing {len(all_datasets)} unique datasets in parallel")
+    logger.info("Processing %d unique datasets in parallel.", len(all_datasets))
     data = []
     with ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(__get_did, dataset): dataset for dataset in all_datasets
+            executor.submit(_get_did, dataset): dataset for dataset in all_datasets
         }
         for future in tqdm(as_completed(futures), total=len(futures)):
             try:
@@ -227,7 +261,7 @@ def __create_daily_report(overwrite=False):
                     data.append(result)
             except Exception as e:
                 bildid = futures[future]
-                print(f"Warning: failed to fetch dataset {bildid}: {e}")
+                logger.warning("Failed to fetch dataset %s: %s", bildid, e)
 
     df = pd.DataFrame(data).drop_duplicates(subset=["bildid"])
 
@@ -243,7 +277,7 @@ def __create_daily_report(overwrite=False):
     return df
 
 
-def get_bildids():
+def get_all_bildids() -> list:
     """
     Retrieve all dataset IDs from the Brain Image Library across metadata versions.
 
@@ -255,7 +289,7 @@ def get_bildids():
 
     Example:
         >>> from brainimagelibrary import reports
-        >>> ids = reports.get_bildids()
+        >>> ids = reports.get_all_bildids()
         >>> print(type(ids))
         <class 'list'>
         >>> print(ids[:3])

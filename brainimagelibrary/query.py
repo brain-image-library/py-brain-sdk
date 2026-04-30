@@ -1,4 +1,4 @@
-"""Retrieve dataset metadata from the Brain Image Library /retrieve endpoint."""
+"""Query dataset metadata from the Brain Image Library /query endpoint."""
 
 import logging
 from typing import Optional
@@ -7,9 +7,9 @@ from ._api import BIL_API_BASE, DOWNLOAD_BASE, _fetch
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["by_id", "by_directory", "by_url", "by_affiliation"]
+__all__ = ["by_id", "by_directory", "by_url", "by_affiliation", "by_text", "by_version"]
 
-_ENDPOINT = f"{BIL_API_BASE}/retrieve"
+_ENDPOINT = f"{BIL_API_BASE}/query"
 
 
 def by_id(
@@ -38,8 +38,8 @@ def by_id(
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> from brainimagelibrary.metadata import retrieve
-        >>> metadata = retrieve.by_id(bildid="act-bag")
+        >>> from brainimagelibrary import query
+        >>> metadata = query.by_id(bildid="act-bag")
         >>> print(type(metadata))
         <class 'dict'>
         >>> print("retjson" in metadata)
@@ -76,8 +76,8 @@ def by_directory(
         requests.exceptions.RequestException: If an error occurs during the API request.
 
     Example:
-        >>> from brainimagelibrary.metadata import retrieve
-        >>> metadata = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
+        >>> from brainimagelibrary import query
+        >>> metadata = query.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
         >>> print(type(metadata))
         <class 'dict'>
         >>> print("retjson" in metadata)
@@ -106,8 +106,8 @@ def by_url(url: Optional[str] = None) -> Optional[dict]:
         None: If the request fails or encounters an exception.
 
     Example:
-        >>> from brainimagelibrary.metadata import retrieve
-        >>> metadata = retrieve.by_url("https://download.brainimagelibrary.org/2019/02/13/H19.28.012.MITU.01.05")
+        >>> from brainimagelibrary import query
+        >>> metadata = query.by_url("https://download.brainimagelibrary.org/2019/02/13/H19.28.012.MITU.01.05")
         >>> print(type(metadata))
         <class 'dict'>
         >>> print("retjson" in metadata)
@@ -148,11 +148,81 @@ def by_affiliation(
             API request.
 
     Example:
-        >>> from brainimagelibrary.metadata import retrieve
-        >>> results = retrieve.by_affiliation("Carnegie Mellon University")
+        >>> from brainimagelibrary import query
+        >>> results = query.by_affiliation("Carnegie Mellon University")
         >>> print(type(results))
         <class 'dict'>
         >>> print(len(results) > 0)
         True
     """
     return _fetch(f"{_ENDPOINT}?affiliation={affiliation}", params=params, headers=headers)
+
+
+def by_text(
+    text: str,
+    params: Optional[dict] = None,
+    headers: Optional[dict] = None,
+) -> Optional[dict]:
+    """
+    Performs a full-text search across Brain Image Library datasets.
+
+    Sends a GET request to the Brain Image Library full-text search endpoint
+    and returns all matching records.
+
+    Args:
+        text (str): The search string to query against the BIL index.
+        params (dict, optional): Additional query parameters to include in the
+            API request. Defaults to None.
+        headers (dict, optional): HTTP headers to include in the API request.
+            Defaults to None.
+
+    Returns:
+        dict: The API response containing matching dataset records.
+        dict: An empty dictionary if no results are found.
+        None: If the request fails or encounters an exception.
+
+    Raises:
+        requests.exceptions.RequestException: If an error occurs during the
+            API request.
+
+    Example:
+        >>> from brainimagelibrary import query
+        >>> results = query.by_text("mouse cortex")
+        >>> print(type(results))
+        <class 'dict'>
+        >>> print(len(results) > 0)
+        True
+    """
+    return _fetch(f"{_ENDPOINT}/fulltext?text={text}", params=params, headers=headers)
+
+
+def by_version(version: str = "2.0") -> Optional[list]:
+    """
+    Retrieves dataset IDs based on metadata version.
+
+    This function sends a GET request to the Brain Image Library API to fetch
+    dataset IDs associated with a specific metadata version.
+
+    Args:
+        version (str, optional): The metadata version to query. Defaults to "2.0".
+
+    Returns:
+        list: A list of dataset IDs (`bildids`) if the request is successful.
+        dict: An empty dictionary if no datasets are found for the specified version.
+        None: If the request fails or encounters an exception.
+
+    Raises:
+        requests.exceptions.RequestException: If an error occurs during the API request.
+
+    Example:
+        >>> from brainimagelibrary import query
+        >>> ids = query.by_version(version="1.0")
+        >>> print(type(ids))
+        <class 'list'>
+        >>> print(len(ids) > 0)
+        True
+    """
+    data = _fetch(f"{_ENDPOINT}/submission?metadata={version}")
+    if not data:
+        return data  # None (request failed) or {} (not found)
+    return data.get("bildids")

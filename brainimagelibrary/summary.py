@@ -1,7 +1,72 @@
+"""Summary utilities for Brain Image Library daily inventory reports."""
+
+import logging
+import requests
+import pandas as pd
+from pathlib import Path
+from typing import Optional
+
 from . import reports
 
+logger = logging.getLogger(__name__)
 
-def daily(option="simple", overwrite=False):
+__all__ = ["load", "daily"]
+
+
+def load(date: str) -> Optional[pd.DataFrame]:
+    """
+    Load a daily inventory report for a specific date as a DataFrame.
+
+    Follows a two-step lookup strategy:
+
+    1. Read ``/bil/data/inventory/daily/<date>.tsv`` from the BIL shared
+       filesystem if it exists.
+    2. Otherwise download the file from
+       ``https://download.brainimagelibrary.org/inventory/daily/<date>.tsv``
+       and cache it under ``/tmp/``.
+
+    If neither source is available, a warning is logged and ``None`` is returned.
+
+    Args:
+        date (str): Date in ``YYYYMMDD`` format (e.g. ``"20240101"``).
+
+    Returns:
+        pd.DataFrame | None: The inventory report as a DataFrame, or ``None``
+        when data for the requested date cannot be found or downloaded.
+
+    Example:
+        >>> from brainimagelibrary import summary
+        >>> df = summary.load("20240101")
+        >>> if df is not None:
+        ...     print(type(df))
+        ...     print(len(df) > 0)
+        <class 'pandas.core.frame.DataFrame'>
+        True
+        >>> df_missing = summary.load("19000101")
+        Data for 19000101 is unavailable.
+    """
+    bil_path = Path(f"/bil/data/inventory/daily/{date}.tsv")
+    if bil_path.exists():
+        return pd.read_csv(bil_path, sep="\t")
+
+    url = f"https://download.brainimagelibrary.org/inventory/daily/{date}.tsv"
+    tmp_path = f"/tmp/{date}.tsv"
+
+    try:
+        response = requests.get(url, timeout=30)
+        if response.status_code == 200:
+            with open(tmp_path, "wb") as f:
+                f.write(response.content)
+            return pd.read_csv(tmp_path, sep="\t")
+        else:
+            logger.warning("Data for %s is unavailable.", date)
+            return None
+    except requests.exceptions.RequestException:
+        logger.warning("Data for %s is unavailable.", date)
+        return None
+
+
+def daily(option: str = "simple", overwrite: bool = False) -> dict:
     """
     Returns a summary of the daily Brain Image Library inventory report.
 

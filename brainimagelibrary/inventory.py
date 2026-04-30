@@ -1,3 +1,6 @@
+"""Inventory retrieval and download utilities for Brain Image Library datasets."""
+
+import logging
 import requests
 import pandas as pd
 import gzip
@@ -5,11 +8,16 @@ import io
 import json
 import ast
 import os
+from typing import Optional, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 
+logger = logging.getLogger(__name__)
 
-def summary(bildid=None):
+__all__ = ["summary", "DatasetInventory", "to_manifest", "exists", "has", "get"]
+
+
+def summary(bildid: Optional[str] = None) -> Optional[dict]:
     """
     Summarizes inventory information for a dataset.
 
@@ -20,15 +28,15 @@ def summary(bildid=None):
         bildid (str, optional): The unique identifier of the dataset. Defaults to None.
 
     Returns:
-        dict | None: A dictionary containing the following keys, or None if the
+        dict or None: A dictionary containing the following keys, or None if the
             dataset cannot be retrieved:
-            - `pretty_size` (str): Human-readable size of the dataset.
-            - `size` (int): Total size of the dataset in bytes.
-            - `number_of_files` (int): Number of files in the dataset.
-            - `files` (dict): Detailed file information, including:
-                - `frequencies` (dict): Frequency of file extensions.
-                - `types` (list): Types of files in the dataset.
-                - `sizes` (dict): Size of files grouped by extension.
+
+            - ``pretty_size`` (str): Human-readable size of the dataset.
+            - ``size`` (int): Total size of the dataset in bytes.
+            - ``number_of_files`` (int): Number of files in the dataset.
+            - ``files`` (dict): Detailed file information with keys
+              ``frequencies`` (dict of extension counts), ``types`` (list of
+              file types), and ``sizes`` (dict of total size per extension).
 
     Example:
         >>> from brainimagelibrary import inventory
@@ -67,11 +75,11 @@ class DatasetInventory(dict):
     without needing to call module-level functions separately.
     """
 
-    def __init__(self, data, bildid):
+    def __init__(self, data: dict, bildid: str) -> None:
         super().__init__(data)
         self._bildid = bildid
 
-    def to_manifest(self, checksum="md5"):
+    def to_manifest(self, checksum: str = "md5") -> Optional[str]:
         """
         Writes a manifest file for this dataset.
 
@@ -94,14 +102,14 @@ class DatasetInventory(dict):
         """
         valid_checksums = ("md5", "sha256", "xxh64", "b2sum")
         if checksum not in valid_checksums:
-            print(
-                f"Error: checksum must be one of {valid_checksums}, got '{checksum}'."
+            logger.error(
+                "checksum must be one of %s, got '%s'.", valid_checksums, checksum
             )
             return None
 
         manifest = self.get("manifest", [])
         if not manifest:
-            print(f"Error: no manifest entries found for dataset '{self._bildid}'.")
+            logger.error("No manifest entries found for dataset '%s'.", self._bildid)
             return None
 
         df = pd.DataFrame(manifest)
@@ -113,7 +121,48 @@ class DatasetInventory(dict):
         df.to_csv(output_path, sep="\t", index=False)
         return output_path
 
-    def download(self, n=2, extensions=None):
+    def rename(self, new_name: str) -> Optional[str]:
+        """
+        Renames the local download folder for this dataset.
+
+        If the folder ``<bildid>/`` exists on disk it is renamed to
+        ``<new_name>/``.  The internal identifier is updated so that
+        subsequent calls to :meth:`download` and :meth:`to_manifest` use
+        the new name.
+
+        Args:
+            new_name (str): The new folder name.
+
+        Returns:
+            str | None: The new folder path on success, or None on failure.
+
+        Example:
+            >>> from brainimagelibrary import inventory
+            >>> dataset = inventory.get(bildid="act-bag")
+            >>> new_path = dataset.rename("act-bag-renamed")
+            >>> print(new_path)
+            'act-bag-renamed'
+        """
+        if not new_name:
+            logger.error("new_name must be a non-empty string.")
+            return None
+
+        old_folder = self._bildid
+        if os.path.exists(old_folder):
+            try:
+                os.rename(old_folder, new_name)
+            except OSError as e:
+                logger.error("Failed to rename '%s' to '%s': %s", old_folder, new_name, e)
+                return None
+
+        self._bildid = new_name
+        return new_name
+
+    def download(
+        self,
+        n: int = 2,
+        extensions: Optional[Union[str, list]] = None,
+    ) -> Optional[str]:
         """
         Downloads files in this dataset's manifest to a local folder.
 
@@ -141,7 +190,7 @@ class DatasetInventory(dict):
         """
         manifest = self.get("manifest", [])
         if not manifest:
-            print(f"Error: no manifest entries found for dataset '{self._bildid}'.")
+            logger.error("No manifest entries found for dataset '%s'.", self._bildid)
             return None
 
         folder = self._bildid
@@ -165,7 +214,7 @@ class DatasetInventory(dict):
             )
         ]
         if not urls:
-            print(f"Error: no download URLs found for dataset '{self._bildid}'.")
+            logger.error("No download URLs found for dataset '%s'.", self._bildid)
             return folder
 
         results = {"ok": 0, "skipped": 0, "failed": 0}
@@ -220,7 +269,7 @@ class DatasetInventory(dict):
                 return "ok", url
 
             except requests.exceptions.RequestException as e:
-                print(f"\nWarning: failed to download {url}: {e}")
+                logger.warning("Failed to download %s: %s", url, e)
                 return "failed", url
 
         with tqdm(total=len(urls), desc="Overall", unit="file") as overall:
@@ -236,14 +285,16 @@ class DatasetInventory(dict):
                     )
                     overall.update(1)
 
-        print(
-            f"\nDownload complete: {results['ok']} downloaded, "
-            f"{results['skipped']} skipped, {results['failed']} failed."
+        logger.info(
+            "Download complete: %d downloaded, %d skipped, %d failed.",
+            results["ok"],
+            results["skipped"],
+            results["failed"],
         )
         return folder
 
 
-def to_manifest(bildid=None, checksum="md5"):
+def to_manifest(bildid: Optional[str] = None, checksum: str = "md5") -> Optional[str]:
     """
     Writes a manifest file for a dataset.
 
@@ -269,7 +320,7 @@ def to_manifest(bildid=None, checksum="md5"):
         'act-bag.manifest'
     """
     if bildid is None:
-        print("Error: bildid must be provided.")
+        logger.error("bildid must be provided.")
         return None
 
     data = get(bildid=bildid)
@@ -279,7 +330,7 @@ def to_manifest(bildid=None, checksum="md5"):
     return data.to_manifest(checksum=checksum)
 
 
-def has(bildid=None):
+def exists(bildid: Optional[str] = None) -> bool:
     """
     Checks whether the inventory file for a dataset exists and is accessible.
 
@@ -291,9 +342,9 @@ def has(bildid=None):
 
     Example:
         >>> from brainimagelibrary import inventory
-        >>> inventory.has(bildid="act-bag")
+        >>> inventory.exists(bildid="act-bag")
         True
-        >>> inventory.has(bildid="nonexistent-id")
+        >>> inventory.exists(bildid="nonexistent-id")
         False
     """
     if bildid is None:
@@ -308,7 +359,49 @@ def has(bildid=None):
         return False
 
 
-def get(bildid=None):
+def has(bildid: Optional[str] = None, option: Optional[str] = None) -> Optional[bool]:
+    """
+    Checks whether a dataset contains files of a given type.
+
+    First verifies the dataset exists via :func:`exists`, then retrieves its
+    inventory and checks whether ``option`` appears in the ``file_types``
+    field. If ``option`` is ``'cell_by_gene'``, returns True if any manifest
+    entry has ``is_cell_by_gene`` set to True.
+
+    Args:
+        bildid (str, optional): The unique identifier for the dataset. Defaults to None.
+        option (str, optional): The file type/extension to look for, or
+            ``'cell_by_gene'`` to check for cell-by-gene files. Defaults to None.
+
+    Returns:
+        bool | None: True if the condition is met, False if not, or None if the
+            dataset does not exist.
+
+    Example:
+        >>> from brainimagelibrary import inventory
+        >>> inventory.has(bildid="act-bag", option="tif")
+        True
+        >>> inventory.has(bildid="act-bag", option="xyz")
+        False
+        >>> inventory.has(bildid="nonexistent", option="tif")
+        None
+    """
+    if not exists(bildid=bildid):
+        return None
+
+    data = get(bildid=bildid)
+    if data is None:
+        return False
+
+    if option == "cell_by_gene":
+        manifest = data.get("manifest", [])
+        return any(entry.get("is_cell_by_gene") is True for entry in manifest)
+
+    file_types = data.get("file_types", {})
+    return option in file_types
+
+
+def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
     """
     Retrieves inventory information for a dataset by its ID from a compressed JSON (.json.gz).
 
@@ -329,7 +422,7 @@ def get(bildid=None):
         ['number_of_files', 'size', 'pretty_size', 'manifest', 'file_types', 'frequencies', 'mime_types']
     """
     if bildid is None:
-        print("Error: bildid must be provided.")
+        logger.error("bildid must be provided.")
         return None
 
     filename = f"{bildid}.json.gz"
@@ -338,7 +431,7 @@ def get(bildid=None):
     try:
         resp = requests.get(url, timeout=30)
         if resp.status_code != 200:
-            print(f"Error: received status code {resp.status_code} for {url}")
+            logger.error("Received status code %d for %s.", resp.status_code, url)
             return None
 
         try:
@@ -350,12 +443,12 @@ def get(bildid=None):
                 data = ast.literal_eval(raw.decode("utf-8"))
             return DatasetInventory(data, bildid)
         except gzip.BadGzipFile:
-            print("Error: Response is not a valid gzip file.")
+            logger.error("Response is not a valid gzip file.")
             return None
         except (ValueError, SyntaxError) as e:
-            print(f"Error: Decompressed content could not be parsed: {e}")
+            logger.error("Decompressed content could not be parsed: %s", e)
             return None
 
     except requests.exceptions.RequestException as e:
-        print(f"Error making API request: {e}")
+        logger.error("Error making API request: %s", e)
         return None

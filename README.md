@@ -1,4 +1,3 @@
-![Status](https://github.com/brain-image-library/py-brain-sdk/actions/workflows/bump-version.yml/badge.svg)
 ![Issue](https://img.shields.io/github/issues/brain-image-library/py-brain-sdk)
 ![forks](https://img.shields.io/github/forks/brain-image-library/py-brain-sdk)
 ![Stars](https://img.shields.io/github/stars/brain-image-library/py-brain-sdk)
@@ -11,13 +10,77 @@ py-brain-sdk is a Python library that simplifies interaction with the Brain Imag
 With py-brain-sdk, you can
 
 * Search and retrieve brain imaging datasets and metadata.
+* Query datasets by ID, directory path, contributor affiliation, or free-text search.
+* Look up DOI metadata and citation counts from DataCite, OpenCitations, Crossref, and Semantic Scholar.
+* Browse BIL collections and enumerate their constituent datasets.
 * Download specific image files or subsets of large datasets.
-* Interface with BIL’s visualization and computational tools.
 
-This SDK is designed to streamline workflows for neuroscience research, making it easier to integrate BIL’s vast resources into your 
-Python projects.
+## Installation
+
+```bash
+pip install brainimagelibrary
+```
+
+## Quick Start
+
+### Retrieve dataset metadata
+
+```python
+from brainimagelibrary import retrieve, query
+
+# By BIL dataset ID
+metadata = retrieve.by_id(bildid="act-bag")
+
+# By directory path
+metadata = retrieve.by_directory(directory="/bil/data/2019/02/13/H19.28.012.MITU.01.05")
+
+# Full-text search
+results = query.by_text("mouse cortex")
+
+# By contributor affiliation
+results = retrieve.by_affiliation("Carnegie Mellon University")
+```
+
+### List all dataset IDs
+
+```python
+import brainimagelibrary as bil
+
+bildids = bil.get_all_bildids()
+print(f"Total datasets: {len(bildids)}")
+```
+
+### DOI and citation lookup (`datecite`)
+
+```python
+from brainimagelibrary import datecite
+
+# Check if a dataset has a registered DOI
+datecite.dataset.exists(bildid="act-bag")
+
+# Get DataCite metadata
+metadata = datecite.dataset.get(bildid="act-bag")
+
+# Get citation counts from DataCite, OpenCitations, Crossref, and Semantic Scholar
+citations = datecite.dataset.get_number_of_citations(bildid="act-bag")
+# {‘datacite’: 2, ‘opencitations’: 1, ‘crossref’: 0, ‘semanticscholar’: 3}
+
+# Get full citation records from all sources
+records = datecite.dataset.get_citations(bildid="act-bag")
+```
+
+### Collection operations
+
+```python
+from brainimagelibrary import datecite
+
+# List all datasets in a collection
+datasets = datecite.collection.get_datasets(bildid="g.19")
+for entry in datasets:
+    print(entry["bildid"], entry["url"])
+```
 
 ---
-Copyright © 2020-2025 Pittsburgh Supercomputing Center. All Rights Reserved.
+Copyright © 2020-2026 Pittsburgh Supercomputing Center. All Rights Reserved.
 
 The [Biomedical Applications Group](https://www.psc.edu/biomedical-applications/) at the [Pittsburgh Supercomputing Center](http://www.psc.edu) in the [Mellon College of Science](https://www.cmu.edu/mcs/) at [Carnegie Mellon University](http://www.cmu.edu).
