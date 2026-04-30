@@ -102,8 +102,8 @@ def daily(option="simple", overwrite=False):
 
     1. Load ``/bil/data/inventory/daily/reports/today.json`` from the BIL
        shared filesystem if it exists (and ``overwrite`` is ``False``).
-    2. If the local file is absent, download the report from the web
-       (URL depends on ``option``).
+    2. If the local file is absent, download ``today.json`` from
+       ``https://download.brainimagelibrary.org/inventory/daily/reports/today.json``.
     3. If the download also fails, print a warning and fall back to
        :func:`__create_daily_report` to build the report locally.
 
@@ -137,20 +137,6 @@ def daily(option="simple", overwrite=False):
         <class 'pandas.core.frame.DataFrame'>
     """
 
-    def fetch_and_load_csv(url, file_path):
-        """Helper function to download and load a TSV file as a DataFrame."""
-        try:
-            response = requests.get(url, timeout=30)
-            if response.status_code == 200:
-                with open(file_path, "wb") as file:
-                    file.write(response.content)
-                return pd.read_csv(file_path, sep="\t")
-            else:
-                return None
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching URL {url}: {e}")
-            return None
-
     if option not in ("simple", "detailed"):
         raise ValueError(f"Invalid option '{option}'. Choose 'simple' or 'detailed'.")
 
@@ -165,26 +151,21 @@ def daily(option="simple", overwrite=False):
                 f"Warning: {local_json} is empty or corrupt, falling back to download."
             )
 
-    # Step 2: attempt web download
-    if option == "simple":
-        base_url = "https://download.brainimagelibrary.org/inventory/daily"
-        today = datetime.today().strftime("%Y%m%d")
-        url = f"{base_url}/{today}.tsv"
-        file_path = f"/tmp/{today}.tsv"
-    else:
-        url = "https://download.brainimagelibrary.org/inventory/daily/reports/today.tsv"
-        file_path = "/tmp/today.tsv"
-
-    df = fetch_and_load_csv(url, file_path)
+    # Step 2: attempt HTTPS download of today.json
+    remote_json_url = "https://download.brainimagelibrary.org/inventory/daily/reports/today.json"
+    try:
+        response = requests.get(remote_json_url, timeout=30)
+        if response.status_code == 200:
+            print(f"Loading daily report from {remote_json_url}.")
+            return pd.read_json(response.content)
+        else:
+            print(f"Warning: received HTTP {response.status_code} from {remote_json_url}.")
+    except (requests.exceptions.RequestException, ValueError) as e:
+        print(f"Warning: could not fetch {remote_json_url}: {e}")
 
     # Step 3: build from scratch if download failed
-    if df is None:
-        print(
-            f"Cannot download daily report from {url}. Building report from scratch..."
-        )
-        df = __create_daily_report(overwrite)
-
-    return df
+    print("Building report from scratch...")
+    return __create_daily_report(overwrite)
 
 
 def __create_daily_report(overwrite=False):
