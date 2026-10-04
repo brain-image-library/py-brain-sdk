@@ -136,11 +136,42 @@ def test_get_uses_local_file_without_downloading(local_json_dir):
     assert result["number_of_files"] == 3
 
 
-def test_get_returns_none_on_bad_local_gzip(local_json_dir):
+def test_get_downloads_when_local_gzip_is_bad(local_json_dir):
     (local_json_dir / "act-bag.json.gz").write_bytes(b"not gzip data")
     with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.return_value = make_gzip_response(SAMPLE_INVENTORY)
         result = inventory.get(bildid="act-bag")
-    mock_get.assert_not_called()
+    mock_get.assert_called_once()
+    assert result["number_of_files"] == 3
+
+
+def test_get_downloads_when_local_gzip_is_truncated(local_json_dir):
+    write_local_gzip(local_json_dir, "act-bag", SAMPLE_INVENTORY)
+    path = local_json_dir / "act-bag.json.gz"
+    path.write_bytes(path.read_bytes()[:-20])
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.return_value = make_gzip_response(SAMPLE_INVENTORY)
+        result = inventory.get(bildid="act-bag")
+    mock_get.assert_called_once()
+    assert result["number_of_files"] == 3
+
+
+def test_get_downloads_when_local_file_unreadable(local_json_dir):
+    write_local_gzip(local_json_dir, "act-bag", SAMPLE_INVENTORY)
+    with patch("brainimagelibrary.inventory.open", side_effect=PermissionError("denied"), create=True), \
+         patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.return_value = make_gzip_response(SAMPLE_INVENTORY)
+        result = inventory.get(bildid="act-bag")
+    mock_get.assert_called_once()
+    assert result["number_of_files"] == 3
+
+
+def test_get_returns_none_on_truncated_download():
+    truncated = make_gzip_response(SAMPLE_INVENTORY)
+    truncated.content = truncated.content[:-20]
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.return_value = truncated
+        result = inventory.get(bildid="act-bag")
     assert result is None
 
 

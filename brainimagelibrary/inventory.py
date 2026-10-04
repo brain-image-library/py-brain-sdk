@@ -8,6 +8,7 @@ import io
 import json
 import ast
 import os
+import zlib
 from typing import Optional, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
@@ -440,9 +441,12 @@ def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
             with open(local_path, "rb") as f:
                 content = f.read()
         except OSError as e:
-            logger.error("Could not read %s: %s", local_path, e)
-            return None
-        return _parse_inventory(content, bildid)
+            logger.warning("Could not read %s: %s", local_path, e)
+        else:
+            inventory = _parse_inventory(content, bildid, source=local_path)
+            if inventory is not None:
+                return inventory
+        logger.warning("Falling back to downloading %s.", filename)
 
     url = f"{REMOTE_JSON_URL}/{filename}"
 
@@ -455,22 +459,26 @@ def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
         logger.error("Error making API request: %s", e)
         return None
 
-    return _parse_inventory(resp.content, bildid)
+    return _parse_inventory(resp.content, bildid, source=url)
 
 
-def _parse_inventory(content: bytes, bildid: str) -> Optional["DatasetInventory"]:
+def _parse_inventory(
+    content: bytes, bildid: str, source: str
+) -> Optional["DatasetInventory"]:
     """Decompress and parse gzipped inventory JSON into a DatasetInventory."""
     try:
         with gzip.GzipFile(fileobj=io.BytesIO(content)) as gz:
             raw = gz.read()
+    except (OSError, EOFError, zlib.error) as e:
+        logger.error("%s is not a valid gzip file: %s", source, e)
+        return None
+
+    try:
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             data = ast.literal_eval(raw.decode("utf-8"))
         return DatasetInventory(data, bildid)
-    except gzip.BadGzipFile:
-        logger.error("Response is not a valid gzip file.")
-        return None
     except (ValueError, SyntaxError) as e:
-        logger.error("Decompressed content could not be parsed: %s", e)
+        logger.error("Content of %s could not be parsed: %s", source, e)
         return None
