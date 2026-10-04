@@ -35,6 +35,18 @@ def make_gzip_response(data):
     return mock
 
 
+@pytest.fixture(autouse=True)
+def local_json_dir(tmp_path, monkeypatch):
+    """Point the local inventory directory at an empty temp dir by default."""
+    monkeypatch.setattr(inventory, "LOCAL_JSON_DIR", str(tmp_path))
+    return tmp_path
+
+
+def write_local_gzip(directory, bildid, data):
+    with gzip.open(directory / f"{bildid}.json.gz", "wb") as gz:
+        gz.write(json.dumps(data).encode("utf-8"))
+
+
 def make_mock_response(status_code=200, content=b""):
     mock = MagicMock()
     mock.status_code = status_code
@@ -112,6 +124,31 @@ def test_get_requests_correct_url():
     url = mock_get.call_args[0][0]
     assert "act-bag.json.gz" in url
     assert "download.brainimagelibrary.org" in url
+
+
+
+def test_get_uses_local_file_without_downloading(local_json_dir):
+    write_local_gzip(local_json_dir, "act-bag", SAMPLE_INVENTORY)
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        result = inventory.get(bildid="act-bag")
+    mock_get.assert_not_called()
+    assert isinstance(result, DatasetInventory)
+    assert result["number_of_files"] == 3
+
+
+def test_get_returns_none_on_bad_local_gzip(local_json_dir):
+    (local_json_dir / "act-bag.json.gz").write_bytes(b"not gzip data")
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        result = inventory.get(bildid="act-bag")
+    mock_get.assert_not_called()
+    assert result is None
+
+
+def test_exists_uses_local_file_without_request(local_json_dir):
+    write_local_gzip(local_json_dir, "act-bag", SAMPLE_INVENTORY)
+    with patch("brainimagelibrary.inventory.requests.head") as mock_head:
+        assert inventory.exists(bildid="act-bag") is True
+    mock_head.assert_not_called()
 
 
 # --- to_manifest() (module-level) ---

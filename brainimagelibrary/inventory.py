@@ -14,6 +14,9 @@ from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
+LOCAL_JSON_DIR = "/bil/data/inventory/datasets/JSON"
+REMOTE_JSON_URL = "https://download.brainimagelibrary.org/inventory/datasets/JSON"
+
 __all__ = ["summary", "DatasetInventory", "to_manifest", "exists", "has", "get"]
 
 
@@ -350,7 +353,10 @@ def exists(bildid: Optional[str] = None) -> bool:
     if bildid is None:
         return False
 
-    url = f"https://download.brainimagelibrary.org/inventory/datasets/JSON/{bildid}.json.gz"
+    if os.path.isfile(os.path.join(LOCAL_JSON_DIR, f"{bildid}.json.gz")):
+        return True
+
+    url = f"{REMOTE_JSON_URL}/{bildid}.json.gz"
 
     try:
         resp = requests.head(url, timeout=30)
@@ -426,29 +432,45 @@ def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
         return None
 
     filename = f"{bildid}.json.gz"
-    url = f"https://download.brainimagelibrary.org/inventory/datasets/JSON/{filename}"
+    local_path = os.path.join(LOCAL_JSON_DIR, filename)
+
+    if os.path.isfile(local_path):
+        logger.info("Loading inventory from %s.", local_path)
+        try:
+            with open(local_path, "rb") as f:
+                content = f.read()
+        except OSError as e:
+            logger.error("Could not read %s: %s", local_path, e)
+            return None
+        return _parse_inventory(content, bildid)
+
+    url = f"{REMOTE_JSON_URL}/{filename}"
 
     try:
         resp = requests.get(url, timeout=30)
         if resp.status_code != 200:
             logger.error("Received status code %d for %s.", resp.status_code, url)
             return None
-
-        try:
-            with gzip.GzipFile(fileobj=io.BytesIO(resp.content)) as gz:
-                raw = gz.read()
-            try:
-                data = json.loads(raw)
-            except json.JSONDecodeError:
-                data = ast.literal_eval(raw.decode("utf-8"))
-            return DatasetInventory(data, bildid)
-        except gzip.BadGzipFile:
-            logger.error("Response is not a valid gzip file.")
-            return None
-        except (ValueError, SyntaxError) as e:
-            logger.error("Decompressed content could not be parsed: %s", e)
-            return None
-
     except requests.exceptions.RequestException as e:
         logger.error("Error making API request: %s", e)
+        return None
+
+    return _parse_inventory(resp.content, bildid)
+
+
+def _parse_inventory(content: bytes, bildid: str) -> Optional["DatasetInventory"]:
+    """Decompress and parse gzipped inventory JSON into a DatasetInventory."""
+    try:
+        with gzip.GzipFile(fileobj=io.BytesIO(content)) as gz:
+            raw = gz.read()
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            data = ast.literal_eval(raw.decode("utf-8"))
+        return DatasetInventory(data, bildid)
+    except gzip.BadGzipFile:
+        logger.error("Response is not a valid gzip file.")
+        return None
+    except (ValueError, SyntaxError) as e:
+        logger.error("Decompressed content could not be parsed: %s", e)
         return None
