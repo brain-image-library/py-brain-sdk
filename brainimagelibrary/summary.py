@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from . import reports
+from ._api import _is_server_error, _report_unreachable
 
 logger = logging.getLogger(__name__)
 
@@ -54,16 +55,20 @@ def load(date: str) -> Optional[pd.DataFrame]:
 
     try:
         response = requests.get(url, timeout=30)
-        if response.status_code == 200:
-            with open(tmp_path, "wb") as f:
-                f.write(response.content)
-            return pd.read_csv(tmp_path, sep="\t")
-        else:
-            logger.warning("Data for %s is unavailable.", date)
-            return None
-    except requests.exceptions.RequestException:
+    except requests.exceptions.RequestException as e:
         logger.warning("Data for %s is unavailable.", date)
+        _report_unreachable(url, e)
         return None
+
+    if response.status_code == 200:
+        with open(tmp_path, "wb") as f:
+            f.write(response.content)
+        return pd.read_csv(tmp_path, sep="\t")
+
+    logger.warning("Data for %s is unavailable.", date)
+    if _is_server_error(response.status_code):
+        _report_unreachable(url, f"HTTP {response.status_code}")
+    return None
 
 
 def daily(option: str = "simple", overwrite: bool = False) -> dict:

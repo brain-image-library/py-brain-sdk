@@ -17,15 +17,17 @@ Private helpers (not part of the public API)
 _get_did(bildid)
     Fetch combined metadata + inventory data for a single dataset.
 _create_daily_report(overwrite)
-    Build the daily report locally when the remote download fails.
+    Build the daily report locally by querying every dataset directly.
 """
 
+import io
 import logging
 import requests
 from typing import Optional
 
 from .query import by_id, by_version
 from .inventory import get as inventory_get
+from ._api import UNREACHABLE_MESSAGE, _is_server_error, _report_unreachable
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
@@ -105,38 +107,30 @@ def daily(option: str = "simple", overwrite: bool = False) -> pd.DataFrame:
     """
     Retrieve the daily inventory report from the Brain Image Library.
 
-    The function follows a three-step fallback strategy:
+    The function follows a two-step strategy:
 
     1. Load ``/bil/data/inventory/daily/reports/today.json`` from the BIL
        shared filesystem if it exists (and ``overwrite`` is ``False``).
-<<<<<<< HEAD
-    2. If the local file is absent, download ``today.json`` from
-       ``https://download.brainimagelibrary.org/inventory/daily/reports/today.json``.
-    3. If the download also fails, print a warning and fall back to
-=======
-    2. If the local file is absent, download the report from the web
-       (URL depends on ``option``).
-    3. If the download also fails, log a warning and fall back to
->>>>>>> e0193ad84f151b8be9a0eca9cfafa8c1500f0b7a
-       :func:`__create_daily_report` to build the report locally.
+    2. If the local file is absent (or unreadable), download
+       ``today.json`` over HTTPS instead.
+
+    If neither the local file nor the HTTPS download is available, the
+    function raises a :class:`RuntimeError` rather than silently building a
+    report from scratch.
 
     Args:
-        option (str, optional): The type of daily report to fetch when falling
-            back to a web download.  Options are:
-
-            - ``"simple"`` *(default)*: Fetches the simple daily inventory TSV
-              from ``download.brainimagelibrary.org/inventory/daily/<YYYYMMDD>.tsv``.
-            - ``"detailed"``: Fetches the pre-built detailed report from
-              ``download.brainimagelibrary.org/inventory/daily/reports/today.tsv``.
-
+        option (str, optional): Reserved for future use; must be ``"simple"``
+            or ``"detailed"``. Defaults to ``"simple"``.
         overwrite (bool, optional): When ``True``, skip any cached file on disk
-            and force a fresh download or regeneration.  Defaults to ``False``.
+            and force a fresh download.  Defaults to ``False``.
 
     Returns:
         pd.DataFrame: A DataFrame containing the inventory data.
 
     Raises:
         ValueError: If ``option`` is not ``"simple"`` or ``"detailed"``.
+        RuntimeError: If the report cannot be loaded from the local BIL
+            filesystem nor downloaded over HTTPS.
 
     Example:
         >>> from brainimagelibrary import reports
@@ -145,28 +139,8 @@ def daily(option: str = "simple", overwrite: bool = False) -> pd.DataFrame:
         ['bildid', 'contributor', 'affiliation', 'species', 'generalmodality', ...]
         >>> print(len(df))
         1500
-        >>> df_detail = reports.daily(option="detailed", overwrite=True)
-        >>> print(type(df_detail))
-        <class 'pandas.core.frame.DataFrame'>
     """
 
-<<<<<<< HEAD
-=======
-    def fetch_and_load_csv(url, file_path):
-        """Helper function to download and load a TSV file as a DataFrame."""
-        try:
-            response = requests.get(url, timeout=30)
-            if response.status_code == 200:
-                with open(file_path, "wb") as file:
-                    file.write(response.content)
-                return pd.read_csv(file_path, sep="\t")
-            else:
-                return None
-        except requests.exceptions.RequestException as e:
-            logger.error("Error fetching URL %s: %s", url, e)
-            return None
-
->>>>>>> e0193ad84f151b8be9a0eca9cfafa8c1500f0b7a
     if option not in ("simple", "detailed"):
         raise ValueError(f"Invalid option '{option}'. Choose 'simple' or 'detailed'.")
 
@@ -186,21 +160,28 @@ def daily(option: str = "simple", overwrite: bool = False) -> pd.DataFrame:
     try:
         response = requests.get(remote_json_url, timeout=30)
         if response.status_code == 200:
-            print(f"Loading daily report from {remote_json_url}.")
-            return pd.read_json(response.content)
+            logger.info("Loading daily report from %s.", remote_json_url)
+            return pd.read_json(io.StringIO(response.text))
+        elif _is_server_error(response.status_code):
+            _report_unreachable(remote_json_url, f"HTTP {response.status_code}")
         else:
-            print(f"Warning: received HTTP {response.status_code} from {remote_json_url}.")
-    except (requests.exceptions.RequestException, ValueError) as e:
-        print(f"Warning: could not fetch {remote_json_url}: {e}")
+            logger.warning(
+                "Received HTTP %s from %s.", response.status_code, remote_json_url
+            )
+    except requests.exceptions.RequestException as e:
+        _report_unreachable(remote_json_url, e)
+    except ValueError as e:
+        logger.warning("Could not parse %s: %s", remote_json_url, e)
 
-    # Step 3: build from scratch if download failed
-    if df is None:
-        logger.warning(
-            "Cannot download daily report from %s. Building report from scratch...", url
-        )
-        df = _create_daily_report(overwrite)
-
-    return df
+    # Step 3: neither source is available - stop and inform the user
+    message = (
+        f"Could not load daily report: local file {local_json} does not exist "
+        f"(or is unreadable) and the HTTPS download from {remote_json_url} "
+        "failed. Please check the BIL shared filesystem or your network "
+        f"connection and try again. {UNREACHABLE_MESSAGE}"
+    )
+    logger.error(message)
+    raise RuntimeError(message)
 
 def _create_daily_report(overwrite: bool = False) -> pd.DataFrame:
     """
