@@ -7,11 +7,17 @@ import gzip
 import io
 import json
 import ast
+import copy
+import functools
 import os
+import re
+import time
 import zlib
 from typing import Optional, Union
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+
+from ._api import _is_server_error, _report_unreachable
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +25,68 @@ LOCAL_JSON_DIR = "/bil/data/inventory/datasets/JSON"
 REMOTE_JSON_URL = "https://download.brainimagelibrary.org/inventory/datasets/JSON"
 
 __all__ = ["summary", "DatasetInventory", "to_manifest", "exists", "has", "get"]
+
+_BILDID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF = 1.0  # seconds before the first retry; doubled after each attempt
+_RETRY_STATUS_CODES = (502, 503, 504)
+
+CACHE_SIZE = 32
+
+
+class InventoryError(Exception):
+    """Base class for errors raised by :func:`get` when ``raise_errors=True``."""
+
+
+class InvalidBildid(InventoryError, ValueError):
+    """The dataset identifier is missing or malformed."""
+
+
+class DatasetNotFound(InventoryError):
+    """No inventory exists for the requested dataset."""
+
+
+class InventoryUnavailable(InventoryError):
+    """The Brain Image Library could not be reached."""
+
+
+class InvalidInventory(InventoryError):
+    """The inventory file exists but could not be decoded."""
+
+
+def _validate_bildid(bildid: Optional[str]) -> None:
+    """Raise :class:`InvalidBildid` unless *bildid* is safe to use in a path and URL."""
+    if not bildid:
+        raise InvalidBildid("bildid must be provided.")
+    if not isinstance(bildid, str) or not _BILDID_PATTERN.match(bildid) or ".." in bildid:
+        raise InvalidBildid(f"Invalid bildid '{bildid}'.")
+
+
+def _request(method, url: str, **kwargs) -> requests.Response:
+    """
+    Call ``method(url, **kwargs)``, retrying connection errors, timeouts and
+    HTTP 502/503/504 with exponential backoff. The last response is returned
+    and the last exception re-raised once ``MAX_ATTEMPTS`` is reached.
+    """
+    delay = RETRY_BACKOFF
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            resp = method(url, **kwargs)
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt == MAX_ATTEMPTS:
+                raise
+            reason = e
+        else:
+            if resp.status_code not in _RETRY_STATUS_CODES or attempt == MAX_ATTEMPTS:
+                return resp
+            reason = f"HTTP {resp.status_code}"
+        logger.warning(
+            "Attempt %d/%d for %s failed (%s); retrying in %.1fs.",
+            attempt, MAX_ATTEMPTS, url, reason, delay,
+        )
+        time.sleep(delay)
+        delay *= 2
 
 
 def summary(bildid: Optional[str] = None) -> Optional[dict]:
@@ -53,6 +121,8 @@ def summary(bildid: Optional[str] = None) -> Optional[dict]:
         ['frequencies', 'types', 'sizes']
     """
     metadata = get(bildid=bildid)
+    if metadata is None:
+        return None
     manifest = metadata["manifest"]
     df = pd.DataFrame(manifest)
 
@@ -222,6 +292,7 @@ class DatasetInventory(dict):
             return folder
 
         results = {"ok": 0, "skipped": 0, "failed": 0}
+        unreachable = []
 
         def _download_one(url):
             path_part = url.split("://", 1)[-1].split("/", 1)[-1]
@@ -246,6 +317,8 @@ class DatasetInventory(dict):
                     return "ok", url
 
                 if resp.status_code not in (200, 206):
+                    if _is_server_error(resp.status_code):
+                        unreachable.append((url, f"HTTP {resp.status_code}"))
                     return "failed", url
 
                 resuming = resp.status_code == 206
@@ -274,6 +347,7 @@ class DatasetInventory(dict):
 
             except requests.exceptions.RequestException as e:
                 logger.warning("Failed to download %s: %s", url, e)
+                unreachable.append((url, e))
                 return "failed", url
 
         with tqdm(total=len(urls), desc="Overall", unit="file") as overall:
@@ -295,6 +369,9 @@ class DatasetInventory(dict):
             results["skipped"],
             results["failed"],
         )
+        if unreachable:
+            url, reason = unreachable[0]
+            _report_unreachable(url, reason)
         return folder
 
 
@@ -351,7 +428,9 @@ def exists(bildid: Optional[str] = None) -> bool:
         >>> inventory.exists(bildid="nonexistent-id")
         False
     """
-    if bildid is None:
+    try:
+        _validate_bildid(bildid)
+    except InvalidBildid:
         return False
 
     if os.path.isfile(os.path.join(LOCAL_JSON_DIR, f"{bildid}.json.gz")):
@@ -360,20 +439,24 @@ def exists(bildid: Optional[str] = None) -> bool:
     url = f"{REMOTE_JSON_URL}/{bildid}.json.gz"
 
     try:
-        resp = requests.head(url, timeout=30)
-        return resp.status_code == 200
-    except requests.exceptions.RequestException:
+        resp = _request(requests.head, url, timeout=30, allow_redirects=True)
+    except requests.exceptions.RequestException as e:
+        _report_unreachable(url, e)
         return False
+
+    if _is_server_error(resp.status_code):
+        _report_unreachable(url, f"HTTP {resp.status_code}")
+    return resp.status_code == 200
 
 
 def has(bildid: Optional[str] = None, option: Optional[str] = None) -> Optional[bool]:
     """
     Checks whether a dataset contains files of a given type.
 
-    First verifies the dataset exists via :func:`exists`, then retrieves its
-    inventory and checks whether ``option`` appears in the ``file_types``
-    field. If ``option`` is ``'cell_by_gene'``, returns True if any manifest
-    entry has ``is_cell_by_gene`` set to True.
+    Retrieves the dataset's inventory via :func:`get` and checks whether
+    ``option`` appears in the ``file_types`` field. If ``option`` is
+    ``'cell_by_gene'``, returns True if any manifest entry has
+    ``is_cell_by_gene`` set to True.
 
     Args:
         bildid (str, optional): The unique identifier for the dataset. Defaults to None.
@@ -381,8 +464,9 @@ def has(bildid: Optional[str] = None, option: Optional[str] = None) -> Optional[
             ``'cell_by_gene'`` to check for cell-by-gene files. Defaults to None.
 
     Returns:
-        bool | None: True if the condition is met, False if not, or None if the
-            dataset does not exist.
+        bool | None: True if the condition is met, False if not or if the
+            inventory cannot be decoded, or None if the dataset does not exist
+            or the Brain Image Library is unreachable.
 
     Example:
         >>> from brainimagelibrary import inventory
@@ -393,12 +477,12 @@ def has(bildid: Optional[str] = None, option: Optional[str] = None) -> Optional[
         >>> inventory.has(bildid="nonexistent", option="tif")
         None
     """
-    if not exists(bildid=bildid):
-        return None
-
-    data = get(bildid=bildid)
-    if data is None:
+    try:
+        data = get(bildid=bildid, raise_errors=True)
+    except InvalidInventory:
         return False
+    except InventoryError:
+        return None
 
     if option == "cell_by_gene":
         manifest = data.get("manifest", [])
@@ -408,15 +492,40 @@ def has(bildid: Optional[str] = None, option: Optional[str] = None) -> Optional[
     return option in file_types
 
 
-def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
+def get(
+    bildid: Optional[str] = None, raise_errors: bool = False
+) -> Optional["DatasetInventory"]:
     """
-    Retrieves inventory information for a dataset by its ID from a compressed JSON (.json.gz).
+    Retrieves inventory information for a dataset from its compressed JSON (``.json.gz``).
+
+    The inventory is looked up in the following order:
+
+    1. ``/bil/data/inventory/datasets/JSON/<bildid>.json.gz`` on the BIL
+       shared filesystem, when present and readable.
+    2. ``https://download.brainimagelibrary.org/inventory/datasets/JSON/<bildid>.json.gz``.
+       Connection errors, timeouts and HTTP 502/503/504 are retried up to
+       ``MAX_ATTEMPTS`` times with exponential backoff. If the server is still
+       unreachable, a message pointing to the BIL data center move page is
+       printed.
+
+    Successful lookups are cached in memory (see :func:`clear_cache`); each
+    call returns an independent copy.
 
     Args:
         bildid (str, optional): The unique identifier for the dataset. Defaults to None.
+        raise_errors (bool, optional): When True, raise an :class:`InventoryError`
+            subclass instead of returning None on failure. Defaults to False.
 
     Returns:
-        dict | None: Dataset inventory information if successful, otherwise None.
+        DatasetInventory | None: The dataset inventory, or None on failure when
+            ``raise_errors`` is False.
+
+    Raises:
+        InvalidBildid: ``bildid`` is missing or malformed.
+        DatasetNotFound: No inventory exists for ``bildid``.
+        InventoryUnavailable: The Brain Image Library could not be reached.
+        InvalidInventory: The inventory could not be decoded.
+        InventoryError: Any other unexpected HTTP response.
 
     Example:
         >>> from brainimagelibrary import inventory
@@ -427,11 +536,31 @@ def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
         '1.2 GB'
         >>> print(list(data.keys()))
         ['number_of_files', 'size', 'pretty_size', 'manifest', 'file_types', 'frequencies', 'mime_types']
+        >>> inventory.get(bildid="nonexistent", raise_errors=True)
+        Traceback (most recent call last):
+        ...
+        brainimagelibrary.inventory.DatasetNotFound: ...
     """
-    if bildid is None:
-        logger.error("bildid must be provided.")
+    try:
+        _validate_bildid(bildid)
+        data = _load(bildid)
+    except InventoryError as e:
+        logger.error("%s", e)
+        if raise_errors:
+            raise
         return None
 
+    return DatasetInventory(copy.deepcopy(data), bildid)
+
+
+def clear_cache() -> None:
+    """Discard inventories cached by :func:`get` so the next call reloads them."""
+    _load.cache_clear()
+
+
+@functools.lru_cache(maxsize=CACHE_SIZE)
+def _load(bildid: str) -> dict:
+    """Load the inventory dict for a validated *bildid*, raising on failure."""
     filename = f"{bildid}.json.gz"
     local_path = os.path.join(LOCAL_JSON_DIR, filename)
 
@@ -440,45 +569,48 @@ def get(bildid: Optional[str] = None) -> Optional["DatasetInventory"]:
         try:
             with open(local_path, "rb") as f:
                 content = f.read()
-        except OSError as e:
-            logger.warning("Could not read %s: %s", local_path, e)
-        else:
-            inventory = _parse_inventory(content, bildid, source=local_path)
-            if inventory is not None:
-                return inventory
+            return _parse_inventory(content, source=local_path)
+        except (OSError, InvalidInventory) as e:
+            logger.warning("Could not load %s: %s", local_path, e)
         logger.warning("Falling back to downloading %s.", filename)
 
     url = f"{REMOTE_JSON_URL}/{filename}"
 
     try:
-        resp = requests.get(url, timeout=30)
-        if resp.status_code != 200:
-            logger.error("Received status code %d for %s.", resp.status_code, url)
-            return None
+        resp = _request(requests.get, url, timeout=30)
     except requests.exceptions.RequestException as e:
-        logger.error("Error making API request: %s", e)
-        return None
+        _report_unreachable(url, e)
+        raise InventoryUnavailable(f"Could not retrieve {url}: {e}") from e
 
-    return _parse_inventory(resp.content, bildid, source=url)
+    if _is_server_error(resp.status_code):
+        _report_unreachable(url, f"HTTP {resp.status_code}")
+        raise InventoryUnavailable(f"Received HTTP {resp.status_code} for {url}.")
+    if resp.status_code == 404:
+        raise DatasetNotFound(f"No inventory found for '{bildid}' at {url}.")
+    if resp.status_code != 200:
+        raise InventoryError(f"Received HTTP {resp.status_code} for {url}.")
+
+    return _parse_inventory(resp.content, source=url)
 
 
-def _parse_inventory(
-    content: bytes, bildid: str, source: str
-) -> Optional["DatasetInventory"]:
-    """Decompress and parse gzipped inventory JSON into a DatasetInventory."""
+def _parse_inventory(content: bytes, source: str) -> dict:
+    """Decompress and parse gzipped inventory JSON, raising :class:`InvalidInventory`."""
     try:
         with gzip.GzipFile(fileobj=io.BytesIO(content)) as gz:
             raw = gz.read()
     except (OSError, EOFError, zlib.error) as e:
-        logger.error("%s is not a valid gzip file: %s", source, e)
-        return None
+        raise InvalidInventory(f"{source} is not a valid gzip file: {e}") from e
 
     try:
         try:
             data = json.loads(raw)
         except json.JSONDecodeError:
             data = ast.literal_eval(raw.decode("utf-8"))
-        return DatasetInventory(data, bildid)
-    except (ValueError, SyntaxError) as e:
-        logger.error("Content of %s could not be parsed: %s", source, e)
-        return None
+    except (ValueError, SyntaxError, RecursionError, MemoryError) as e:
+        raise InvalidInventory(f"Content of {source} could not be parsed: {e}") from e
+
+    if not isinstance(data, dict):
+        raise InvalidInventory(
+            f"Content of {source} is a {type(data).__name__}, expected an object."
+        )
+    return data

@@ -42,6 +42,15 @@ def local_json_dir(tmp_path, monkeypatch):
     return tmp_path
 
 
+@pytest.fixture(autouse=True)
+def fresh_inventory_state(monkeypatch):
+    """Start every test with an empty cache and no retry delays."""
+    monkeypatch.setattr(inventory, "RETRY_BACKOFF", 0)
+    inventory.clear_cache()
+    yield
+    inventory.clear_cache()
+
+
 def write_local_gzip(directory, bildid, data):
     with gzip.open(directory / f"{bildid}.json.gz", "wb") as gz:
         gz.write(json.dumps(data).encode("utf-8"))
@@ -252,3 +261,197 @@ def test_summary_aggregates_sizes_by_extension():
     sizes = result["files"]["sizes"]
     assert sizes["tif"] == 768   # 512 + 256
     assert sizes["json"] == 256
+
+
+# --- unreachable BIL ---
+
+from brainimagelibrary._api import UNREACHABLE_MESSAGE
+
+
+def test_get_prints_unreachable_on_timeout(capsys):
+    with patch("brainimagelibrary.inventory.requests.get",
+               side_effect=requests.exceptions.Timeout("timed out")):
+        assert inventory.get(bildid="act-bag") is None
+    assert UNREACHABLE_MESSAGE in capsys.readouterr().out
+
+
+def test_get_prints_unreachable_on_server_error(capsys):
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_mock_response(status_code=503)):
+        assert inventory.get(bildid="act-bag") is None
+    assert UNREACHABLE_MESSAGE in capsys.readouterr().out
+
+
+def test_get_does_not_print_unreachable_on_404(capsys):
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_mock_response(status_code=404)):
+        assert inventory.get(bildid="act-bag") is None
+    assert UNREACHABLE_MESSAGE not in capsys.readouterr().out
+
+
+def test_exists_prints_unreachable_on_connection_error(capsys):
+    with patch("brainimagelibrary.inventory.requests.head",
+               side_effect=requests.exceptions.ConnectionError("refused")):
+        assert inventory.exists(bildid="act-bag") is False
+    assert UNREACHABLE_MESSAGE in capsys.readouterr().out
+
+
+def test_download_prints_unreachable_once_on_timeouts(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    dataset = DatasetInventory(SAMPLE_INVENTORY, "act-bag")
+    with patch("brainimagelibrary.inventory.requests.get",
+               side_effect=requests.exceptions.Timeout("timed out")):
+        assert dataset.download(n=2) == "act-bag"
+    assert capsys.readouterr().out.count(UNREACHABLE_MESSAGE) == 1
+
+
+# --- retries ---
+
+def test_get_retries_server_error_then_succeeds():
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.side_effect = [
+            make_mock_response(status_code=503),
+            requests.exceptions.ConnectionError("reset"),
+            make_gzip_response(SAMPLE_INVENTORY),
+        ]
+        result = inventory.get(bildid="act-bag")
+    assert mock_get.call_count == 3
+    assert result["number_of_files"] == 3
+
+
+def test_get_gives_up_after_max_attempts(capsys):
+    with patch("brainimagelibrary.inventory.requests.get",
+               side_effect=requests.exceptions.Timeout("timed out")) as mock_get:
+        assert inventory.get(bildid="act-bag") is None
+    assert mock_get.call_count == inventory.MAX_ATTEMPTS
+    assert capsys.readouterr().out.count(UNREACHABLE_MESSAGE) == 1
+
+
+def test_get_does_not_retry_404():
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_mock_response(status_code=404)) as mock_get:
+        assert inventory.get(bildid="act-bag") is None
+    mock_get.assert_called_once()
+
+
+# --- raise_errors ---
+
+@pytest.mark.parametrize("response, error", [
+    (make_mock_response(status_code=404), inventory.DatasetNotFound),
+    (make_mock_response(status_code=503), inventory.InventoryUnavailable),
+    (make_mock_response(status_code=403), inventory.InventoryError),
+    (make_mock_response(status_code=200, content=b"not gzip"), inventory.InvalidInventory),
+])
+def test_get_raise_errors_raises_specific_exception(response, error):
+    with patch("brainimagelibrary.inventory.requests.get", return_value=response):
+        with pytest.raises(error):
+            inventory.get(bildid="act-bag", raise_errors=True)
+
+
+def test_get_raise_errors_on_connection_error():
+    with patch("brainimagelibrary.inventory.requests.get",
+               side_effect=requests.exceptions.ConnectionError("refused")):
+        with pytest.raises(inventory.InventoryUnavailable):
+            inventory.get(bildid="act-bag", raise_errors=True)
+
+
+# --- bildid validation ---
+
+@pytest.mark.parametrize("bildid", ["", "../etc", "a/b", "..", ".hidden", "act bag"])
+def test_get_rejects_invalid_bildid_without_request(bildid):
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        assert inventory.get(bildid=bildid) is None
+        with pytest.raises(inventory.InvalidBildid):
+            inventory.get(bildid=bildid, raise_errors=True)
+    mock_get.assert_not_called()
+
+
+def test_exists_rejects_invalid_bildid_without_request():
+    with patch("brainimagelibrary.inventory.requests.head") as mock_head:
+        assert inventory.exists(bildid="../etc") is False
+    mock_head.assert_not_called()
+
+
+# --- content validation ---
+
+def test_get_returns_none_when_inventory_is_not_an_object():
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_gzip_response([1, 2, 3])):
+        assert inventory.get(bildid="act-bag") is None
+
+
+def test_get_returns_none_on_deeply_nested_literal():
+    buf = io.BytesIO()
+    with gzip.GzipFile(fileobj=buf, mode="wb") as gz:
+        gz.write(b"(" * 100000 + b")" * 100000)
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_mock_response(status_code=200, content=buf.getvalue())):
+        assert inventory.get(bildid="act-bag") is None
+
+
+# --- caching ---
+
+def test_get_caches_successful_lookups():
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.return_value = make_gzip_response(SAMPLE_INVENTORY)
+        inventory.get(bildid="act-bag")
+        inventory.get(bildid="act-bag")
+    mock_get.assert_called_once()
+
+
+def test_get_does_not_cache_failures():
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.side_effect = [
+            make_mock_response(status_code=404),
+            make_gzip_response(SAMPLE_INVENTORY),
+        ]
+        assert inventory.get(bildid="act-bag") is None
+        assert inventory.get(bildid="act-bag")["number_of_files"] == 3
+
+
+def test_get_returns_independent_copies():
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_gzip_response(SAMPLE_INVENTORY)):
+        first = inventory.get(bildid="act-bag")
+        first["manifest"].clear()
+        first.rename("other")
+        second = inventory.get(bildid="act-bag")
+    assert len(second["manifest"]) == 3
+    assert second._bildid == "act-bag"
+
+
+def test_clear_cache_forces_reload():
+    with patch("brainimagelibrary.inventory.requests.get") as mock_get:
+        mock_get.return_value = make_gzip_response(SAMPLE_INVENTORY)
+        inventory.get(bildid="act-bag")
+        inventory.clear_cache()
+        inventory.get(bildid="act-bag")
+    assert mock_get.call_count == 2
+
+
+# --- has() / summary() ---
+
+def test_has_does_not_send_head_request():
+    with patch("brainimagelibrary.inventory.requests.head") as mock_head, \
+         patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_gzip_response(SAMPLE_INVENTORY)):
+        assert inventory.has(bildid="act-bag", option="tif") is True
+        assert inventory.has(bildid="act-bag", option="xyz") is False
+    mock_head.assert_not_called()
+
+
+def test_has_returns_none_when_dataset_missing():
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_mock_response(status_code=404)):
+        assert inventory.has(bildid="nonexistent", option="tif") is None
+
+
+def test_has_returns_false_when_inventory_corrupt():
+    with patch("brainimagelibrary.inventory.requests.get",
+               return_value=make_mock_response(status_code=200, content=b"not gzip")):
+        assert inventory.has(bildid="act-bag", option="tif") is False
+
+
+def test_summary_returns_none_when_get_fails():
+    with patch("brainimagelibrary.inventory.get", return_value=None):
+        assert inventory.summary(bildid="act-bag") is None

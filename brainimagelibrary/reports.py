@@ -27,6 +27,7 @@ from typing import Optional
 
 from .query import by_id, by_version
 from .inventory import get as inventory_get
+from ._api import UNREACHABLE_MESSAGE, _is_server_error, _report_unreachable
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
@@ -161,19 +162,23 @@ def daily(option: str = "simple", overwrite: bool = False) -> pd.DataFrame:
         if response.status_code == 200:
             logger.info("Loading daily report from %s.", remote_json_url)
             return pd.read_json(io.StringIO(response.text))
+        elif _is_server_error(response.status_code):
+            _report_unreachable(remote_json_url, f"HTTP {response.status_code}")
         else:
             logger.warning(
                 "Received HTTP %s from %s.", response.status_code, remote_json_url
             )
-    except (requests.exceptions.RequestException, ValueError) as e:
-        logger.warning("Could not fetch %s: %s", remote_json_url, e)
+    except requests.exceptions.RequestException as e:
+        _report_unreachable(remote_json_url, e)
+    except ValueError as e:
+        logger.warning("Could not parse %s: %s", remote_json_url, e)
 
     # Step 3: neither source is available - stop and inform the user
     message = (
         f"Could not load daily report: local file {local_json} does not exist "
         f"(or is unreadable) and the HTTPS download from {remote_json_url} "
         "failed. Please check the BIL shared filesystem or your network "
-        "connection and try again."
+        f"connection and try again. {UNREACHABLE_MESSAGE}"
     )
     logger.error(message)
     raise RuntimeError(message)

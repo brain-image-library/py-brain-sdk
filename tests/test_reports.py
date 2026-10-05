@@ -107,3 +107,13 @@ def test_daily_raises_runtime_error_on_request_exception():
                side_effect=requests.exceptions.RequestException("timeout")):
         with pytest.raises(RuntimeError, match="Could not load daily report"):
             reports.daily(option="simple")
+
+
+def test_daily_prints_unreachable_on_timeout(capsys):
+    from brainimagelibrary._api import UNREACHABLE_MESSAGE
+    with patch("brainimagelibrary.reports.Path.exists", return_value=False), \
+         patch("brainimagelibrary.reports.requests.get",
+               side_effect=requests.exceptions.Timeout("timed out")):
+        with pytest.raises(RuntimeError, match="unreachable at the moment"):
+            reports.daily(option="simple")
+    assert UNREACHABLE_MESSAGE in capsys.readouterr().out

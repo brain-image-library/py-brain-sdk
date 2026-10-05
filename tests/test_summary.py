@@ -131,3 +131,13 @@ def test_daily_passes_option_and_overwrite_to_reports():
     with patch("brainimagelibrary.summary.reports.daily", return_value=SAMPLE_DF) as mock_daily:
         summary.daily(option="detailed", overwrite=True)
     mock_daily.assert_called_once_with(option="detailed", overwrite=True)
+
+
+def test_load_prints_unreachable_on_timeout(capsys):
+    from brainimagelibrary._api import UNREACHABLE_MESSAGE
+    with patch("brainimagelibrary.summary.Path") as mock_path_cls, \
+         patch("brainimagelibrary.summary.requests.get",
+               side_effect=requests.exceptions.Timeout("timed out")):
+        mock_path_cls.return_value.exists.return_value = False
+        assert summary.load("20240101") is None
+    assert UNREACHABLE_MESSAGE in capsys.readouterr().out
